@@ -2,9 +2,17 @@
 <html lang="ja">
 <head>
 	<meta charset="utf-8">
-	<title>kanisasimi</title>
+	<title></title>
 </head>
 <body>
-	<h1><a href="https://twitter.com/kani_sasimi" target="_blank">かにさし</a></h1>
+	<canvas id="canvas"></canvas>
+	<script>
+	var canvas, ctx, width, height;
+	ctx = (canvas = document.getElementById("canvas")).getContext("2d");
+	canvas.width = width = window.innerWIDTH;
+	canvas.height = height = window.innerHEIGHT;
+	
+	ctx.fillRect(0, 0, 100, 100);
+	</script>
 </body>
 </html>
