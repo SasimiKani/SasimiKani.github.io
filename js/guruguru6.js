@@ -1,8 +1,8 @@
 var canvas, ctx, width, height;
 ctx = (canvas = document.getElementById("canvas")).getContext("2d");
-canvas.style = "border:1px solid black;";
-canvas.width = width = 640;
-canvas.height = height = 480;
+//canvas.style = "border:1px solid black;";
+canvas.width = width = window.innerWidth;
+canvas.height = height = window.innerHeight;
 
 var back = "black";
 var fore = ["white", "red"];
