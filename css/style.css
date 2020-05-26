@@ -1,0 +1,9 @@
+body {
+	text-align:center;
+	width:auto;
+}
+
+div#main {
+	margin:0 auto;
+	width:500px;
+}
