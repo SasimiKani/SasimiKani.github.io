@@ -1,9 +1,5 @@
-body {
-	text-align:center;
-	width:auto;
-}
-
 div#main {
+	text-align:center;
 	margin:0 auto;
-	width:500px;
+	width:auto;
 }

@@ -1,0 +1,23 @@
+body {
+	background-color:#eee;
+}
+ul {
+	display: flex;
+	margin: 0 auto;
+}
+li {
+	list-style-type: none;
+}
+.account::before {
+	content: "🦀";
+}
+.account {
+	margin-bottom: 3px;
+}
+.twitter {
+	width: 370px;
+	margin:0 5px;
+}
+.twitter-timeline {
+	height: 600px;
+}
