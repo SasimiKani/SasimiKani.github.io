@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title></title>
+</head>
+<body>
+	<div align="center">
+		<h1><a href="h.html">次へ</a></h1>
+		<canvas></canvas>
+		<span hidden>
+		<input type="submit" value="-" onclick='b*=1.5; view.y=-800*b'> View <input type="submit" value="+" onclick='b/=1.5; view.y=-800*b;'>
+		<input id="auto" type="submit" value="Stop" onclick='
+			var m = document.getElementById("auto");
+			if(m.value=="Auto"){
+				m.value="Stop";
+				auto=true;
+			} else {
+				m.value = "Auto";
+				auto=false;
+			}
+		'><br>
+		<input type="submit" value="cam reset" onclick='camX=camY=camZ=0'>
+		<input type="submit" value="cam random" onclick='
+			camX=parseInt(Math.random()*360, 10);
+			camY=parseInt(Math.random()*360, 10);
+			camZ=parseInt(Math.random()*360, 10);
+		'><br>
+		<input class="cams" type="text" value='camX' size="5">
+		<input type="submit" value="-" onclick='camX -= 10'>
+		<span style="cursor:pointer;" onclick='camX=0'>&nbsp;X&nbsp;</span>
+		<input type="submit" value="+" onclick='camX += 10'>
+		<font color="red">&nbsp;━</font><br>
+		<input class="cams" type="text" value='camY' size="5">
+		<input type="submit" value="-" onclick='camY -= 10'>
+		<span style="cursor:pointer;" onclick='camY=0'>&nbsp;Y&nbsp;</span>
+		<input type="submit" value="+" onclick='camY += 10'>
+		<font color="green">&nbsp;&nbsp;/</font><br>
+		<input class="cams" type="text" value='camZ' size="5">
+		<input type="submit" value="-" onclick='camZ -= 10'>
+		<span style="cursor:pointer;" onclick='camZ=0'>&nbsp;Z&nbsp;</span>
+		<input type="submit" value="+" onclick='camZ += 10'>
+		<font color="blue">&nbsp;┃</font><br>
+		</span>
+	</div>
+	<script>
+		var canvas, ctx, wid, hei, a=0, b=1, i, j, k;
+		var mask, center, view, axis, po, cube, ball;
+		var camX=0, camY=0, camZ=0, camE=false, camTmp={x:0, z:0, px:0, pz:0};
+		var outCams = document.getElementsByClassName("cams");
+		var auto=true;
+
+		canvas = document.getElementsByTagName("canvas")[0];
+		wid = canvas.width = 640;
+		hei = canvas.height = 480;
+		ctx = canvas.getContext("2d");
+		canvas.style = "border:1px solid black;";
+
+		(function(){
+			mask = 400;
+			center = new point_3d(wid/2, 600, hei/2);
+			view = new point_3d(wid/2, -800, hei/2);
+			b/=1.5; view.y=-600*b;
+			axis = {
+				x:[new point_3d(-hei/2, 0, 0), new point_3d(hei/2, 0, 0)],
+				y:[new point_3d(0, -hei/2, 0), new point_3d(0, hei/2, 0)],
+				z:[new point_3d(0, 0, -hei/2), new point_3d(0, 0, hei/2)]
+			};
+			
+			po = [];
+			
+			for (i=0; i<10; i++)
+				po.push(
+					[
+						new rand_point_3d(500),
+						new rand_point_3d(500),
+						new rand_point_3d(500)
+					]
+				);
+			
+			cube = [
+				[
+					new point_3d(-hei/2, -hei/2, -hei/2),
+					new point_3d(hei/2, -hei/2, -hei/2),
+					new point_3d(hei/2, -hei/2, hei/2)
+				],
+				[
+					new point_3d(-hei/2, -hei/2, -hei/2),
+					new point_3d(-hei/2, -hei/2, hei/2),
+					new point_3d(hei/2, -hei/2, hei/2)
+				],
+				
+				[
+					new point_3d(-hei/2, -hei/2, -hei/2),
+					new point_3d(-hei/2, hei/2, -hei/2),
+					new point_3d(-hei/2, hei/2, hei/2)
+				],
+				[
+					new point_3d(-hei/2, -hei/2, -hei/2),
+					new point_3d(-hei/2, -hei/2, hei/2),
+					new point_3d(-hei/2, hei/2, hei/2)
+				],
+				
+				[
+					new point_3d(-hei/2, hei/2, -hei/2),
+					new point_3d(hei/2, hei/2, -hei/2),
+					new point_3d(hei/2, hei/2, hei/2)
+				],
+				[
+					new point_3d(-hei/2, hei/2, -hei/2),
+					new point_3d(-hei/2, hei/2, hei/2),
+					new point_3d(hei/2, hei/2, hei/2)
+				],
+				
+				[
+					new point_3d(hei/2, -hei/2, -hei/2),
+					new point_3d(hei/2, hei/2, -hei/2),
+					new point_3d(hei/2, hei/2, hei/2)
+				],
+				[
+					new point_3d(hei/2, -hei/2, -hei/2),
+					new point_3d(hei/2, -hei/2, hei/2),
+					new point_3d(hei/2, hei/2, hei/2)
+				],
+				
+				[
+					new point_3d(-hei/2, -hei/2, -hei/2),
+					new point_3d(-hei/2, hei/2, -hei/2),
+					new point_3d(hei/2, -hei/2, -hei/2)
+				],
+				[
+					new point_3d(hei/2, hei/2, -hei/2),
+					new point_3d(-hei/2, hei/2, -hei/2),
+					new point_3d(hei/2, -hei/2, -hei/2)
+				],
+				
+				[
+					new point_3d(-hei/2, -hei/2, hei/2),
+					new point_3d(-hei/2, hei/2, hei/2),
+					new point_3d(hei/2, -hei/2, hei/2)
+				],
+				[
+					new point_3d(hei/2, hei/2, hei/2),
+					new point_3d(-hei/2, hei/2, hei/2),
+					new point_3d(hei/2, -hei/2, hei/2)
+				]
+			];
+			
+			ball = [];
+			var m, px, py, pz, x, y, z;
+			px = 0;
+			py = 0;
+			pz = 200;
+			for (i=-180; i<=180; i+=10){
+				for (j=-180; j<=180; j+=10){
+					m = rotation(px, py, pz, i, 1, 0, 0);
+					m = rotation(m[0], m[1], m[2], j, 0, 0, 1);
+					x = m[0];
+					y = m[1];
+					z = m[2];
+					ball.push(new point_3d(x, y, z));
+				}
+			}
+			
+			if (document.cookie == "false")
+				auto = false;
+			
+			if (!auto)
+				document.getElementById("auto").value = "Auto";
+			
+			show();
+		})();
+
+		function point_3d(x, y, z){
+			this.x = x;
+			this.y = y;
+			this.z = z;
+		}
+		function rand_point_3d(n){
+			this.x = Math.random()*n-n/2;
+			this.y = Math.random()*n-n/2;
+			this.z = Math.random()*n-n/2;
+		}
+
+		// 計算
+		function rad(a){ return a*Math.PI/180; }
+		function sin(a){ return Math.sin(rad(a)); }
+		function cos(a){ return Math.cos(rad(a)); }
+		function tan(a){ return Math.tan(rad(a)); }
+		function sq(a){ return a * a; }
+		function rotation(x, y, z, theta, vx, vy, vz){
+			var i, next = [];
+			var array = [
+				[
+					cos(theta) + sq(vx) * (1 - cos(theta)),
+					vx * vy * (1 - cos(theta)) - vz * sin(theta),
+					vx * vz * (1 - cos(theta)) + vy * sin(theta)
+				],
+				[
+					vy * vx * (1 - cos(theta)) + vz * sin(theta),
+					cos(theta) + sq(vy) * (1 - cos(theta)),
+					vy * vz * (1 - cos(theta)) - vx * sin(theta)
+				],
+				[
+					vz * vx * (1 - cos(theta)) - vy * sin(theta),
+					vz * vy * (1 - cos(theta)) + vx * sin(theta),
+					cos(theta) + sq(vz) * (1 - cos(theta))
+				]
+			];
+			for (i in array){
+				next.push(x * array[i][0] + y * array[i][1] + z * array[i][2]);
+			}
+			return next;
+		}
+		function update(p){
+			var m, xyz=['x', 'y', 'z'];
+			for (i in p){
+				m = rotation(p[i].x, p[i].y, p[i].z, 1, 0, 0, 1);
+				p[i].x = m[0];
+				p[i].y = m[1];
+				p[i].z = m[2];
+			}
+		}
+		function updateAxis(){
+			var m, xyz=['x', 'y', 'z'];
+			for (i=0; i<2; i++){
+				for (j in xyz){
+					m = rotation(axis[xyz[j]][i].x,
+								axis[xyz[j]][i].y,
+								axis[xyz[j]][i].z,
+								1, 0, 0, 1);
+					axis[xyz[j]][i].x = m[0];
+					axis[xyz[j]][i].y = m[1];
+					axis[xyz[j]][i].z = m[2];
+				}
+			}
+		}
+
+		function plot(){
+			for (i in ball){
+					arc(ball[i], 2, 'f');
+//					arc(new point_3d(x/360*hei/2, y/360*hei/2, z/360*hei/2), 1, 'f');
+//					arc(new point_3d(y/360*hei/2, z/360*hei/2, x/360*hei/2), 1, 'f');
+//					arc(new point_3d(z/360*hei/2, x/360*hei/2, y/360*hei/2), 1, 'f');
+			}
+		}
+
+		// 描画
+		function line(p1, p2){
+			var m, px, py, pz, ly1, ly2, x1, z1, x2, z2;
+			m = [rotation(p1.x, p1.y, p1.z, camX, 1, 0, 0),
+				rotation(p2.x, p2.y, p2.z, camX, 1, 0, 0)];
+			px = [m[0][0], m[1][0]];
+			py = [m[0][1], m[1][1]];
+			pz = [m[0][2], m[1][2]];
+			m = [rotation(px[0], py[0], pz[0], camY, 0, 1, 0),
+				rotation(px[1], py[1], pz[1], camY, 0, 1, 0)];
+			px = [m[0][0], m[1][0]];
+			py = [m[0][1], m[1][1]];
+			pz = [m[0][2], m[1][2]];
+			m = [rotation(px[0], py[0], pz[0], camZ, 0, 0, 1),
+				rotation(px[1], py[1], pz[1], camZ, 0, 0, 1)];
+			px = [m[0][0], m[1][0]];
+			py = [m[0][1], m[1][1]];
+			pz = [m[0][2], m[1][2]];
+			
+			ly1 = py[0] - view.y;
+			ly2 = py[1]- view.y;
+			if (ly1 != 0){
+				x1 = (px[0] / ly1) * mask;
+				z1 = (pz[0] / ly1) * mask;
+				if (ly1 < 0){
+					x1 *= -1;
+					z1 *= -1;
+				}
+			} else {
+				x1 = px[0];
+				z1 = pz[0];
+			}
+			if (ly2 != 0){
+				x2 = (px[1] / ly2) * mask;
+				z2 = (pz[1] / ly2) * mask;
+				if (ly2 < 0){
+					x2 *= -1;
+					z2 *= -1;
+				}
+			} else {
+				x2 = px[1];
+				z2 = pz[1];
+			}
+			ctx.beginPath();
+			ctx.moveTo(center.x + x1, center.z + z1);
+			ctx.lineTo(center.x + x2, center.z + z2);
+			ctx.stroke();
+		}
+		function polygon(p){
+			var m=[], px, py, pz, ly, x=[], z=[];
+			for (i=0; i<3; i++)
+				m.push(rotation(p[i].x, p[i].y, p[i].z, camX, 1, 0, 0));
+			px = [m[0][0], m[1][0], m[2][0]];
+			py = [m[0][1], m[1][1], m[2][1]];
+			pz = [m[0][2], m[1][2], m[2][2]];
+			for (i=0; i<3; i++)
+				m[i] = rotation(px[i], py[i], pz[i], camY, 0, 1, 0);
+			px = [m[0][0], m[1][0], m[2][0]];
+			py = [m[0][1], m[1][1], m[2][1]];
+			pz = [m[0][2], m[1][2], m[2][2]];
+			for (i=0; i<3; i++)
+				m[i] = rotation(px[i], py[i], pz[i], camZ, 0, 0, 1);
+			px = [m[0][0], m[1][0], m[2][0]];
+			py = [m[0][1], m[1][1], m[2][1]];
+			pz = [m[0][2], m[1][2], m[2][2]];
+			
+			ly = [py[0] - view.y,
+					py[1] - view.y,
+					py[2] - view.y];
+			for (i=0; i<3; i++){
+				if (ly[i] != 0){
+					x.push((px[i] / ly[i]) * mask);
+					z.push((pz[i] / ly[i]) * mask);
+				} else {
+					x.push(px[i]);
+					z.push(pz[i]);
+				}
+			}
+			ctx.beginPath();
+			ctx.moveTo(center.x + x[0], center.z + z[0]);
+			ctx.lineTo(center.x + x[1], center.z + z[1]);
+			ctx.lineTo(center.x + x[2], center.z + z[2]);
+			ctx.closePath();
+			//ctx.fill();
+			ctx.stroke();
+		}
+		function arc(p, r, s='f'){
+			var m, px, py, pz, ly, x, z;
+			m = rotation(p.x, p.y, p.z, camX, 1, 0, 0);
+			px = m[0];
+			py = m[1];
+			pz = m[2];
+			m = rotation(px, py, pz, camY, 0, 1, 0);
+			px = m[0];
+			py = m[1];
+			pz = m[2];
+			m = rotation(px, py, pz, camZ, 0, 0, 1);
+			px = m[0];
+			py = m[1];
+			pz = m[2];
+			
+			ly = py - view.y;
+			if (ly != 0){
+				x = (px / ly) * mask;
+				z = (pz / ly) * mask;
+			} else {
+				x = px;
+				z = pz;
+			}
+			if (ly > 0){
+				ctx.beginPath();
+				ctx.arc(center.x + x, center.z + z, r, 0, Math.PI*2, false);
+				if (s=='f') ctx.fill();
+				if (s=='s') ctx.stroke();
+			}
+		}
+		function guide(){
+			ctx.strokeStyle = "rgb(128,0,0)";
+			line(axis.x[0], axis.x[1]);
+			ctx.strokeStyle = "rgb(0,128,0)";
+			line(axis.y[0], axis.y[1]);
+			ctx.strokeStyle = "rgb(0,0,128)";
+			line(axis.z[0], axis.z[1]);
+			
+			ctx.fillStyle = ctx.strokeStyle = "red";
+			ctx.beginPath();
+			ctx.arc(center.x, center.z, 5, 0, Math.PI*2, false);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.arc(view.x, view.z, 3, 0, Math.PI*2, false);
+			ctx.fill();
+		}
+		function graph(){
+			ctx.strokeStyle = ctx.fillStyle = "red";
+			/*
+			for (i in po)
+				polygon(po[i]);
+			
+			for (i in cube)
+				polygon(cube[i]);
+			*/
+			plot();
+		}
+		function show(){
+			ctx.fillStyle = "white";
+			ctx.fillRect(0, 0, wid, hei);
+			
+			cams = document.getElementsByClassName("cams");
+			cams[0].value = camX;
+			cams[1].value = camY;
+			cams[2].value = camZ;
+			
+			if (auto){
+				/*
+				for (i in po)
+					update(po[i]);
+				*/
+				for (i in cube)
+					update(cube[i]);
+				
+				update(ball);
+				
+				updateAxis();
+			}
+			
+			guide();
+			graph();
+			
+			if (a < 360)
+				a+=10;
+			else
+				a = 0;
+			
+			document.cookie = auto;
+			
+			requestAnimationFrame(show);
+		}
+		canvas.addEventListener('mousedown', function(e){
+			var rect = canvas.getBoundingClientRect();
+			camTmp.x = e.clientX - rect.left;
+			camTmp.z = e.clientY - rect.top;
+			camTmp.px = camZ;
+			camTmp.pz = camX;
+			camE = true;
+		});
+		canvas.addEventListener('mousemove', function(e){
+			if (camE){
+				var rect = canvas.getBoundingClientRect();
+				var X = e.clientX - rect.left;
+				var Y = e.clientY - rect.top;
+				var tmp = {x:X - camTmp.x, z:camTmp.z - Y};
+				camZ = camTmp.px + tmp.x;
+				camX = camTmp.pz + tmp.z;
+			}
+		});
+		canvas.addEventListener('mouseup', function(){
+			camE = false;
+		});
+	</script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="js">
+<head>
+	<meta charset="utf-8">
+</head>
+<body>
+	<div align="center">
+		<h1>おしまい</h1>
+		<canvas></canvas>
+		<script src="j.js"></script>
+		<script>
+var canvas, ctx, wid, hei, cnt=0, a=0, b=1.5, i, j, k;
+var mask, center, view, axis, ball;
+var polygon_tmp = {cnt:0, point:[]};
+var camX=0, camY=0, camZ=0, camE=false, camTmp={x:0, z:0, px:0, pz:0};
+var auto=true;
+
+canvas = document.getElementsByTagName("canvas")[0];
+wid = canvas.width = 640;
+hei = canvas.height = 480;
+ctx = canvas.getContext("2d");
+canvas.style = "border:1px solid black;";
+
+(function(){
+	mask = 400;
+	center = new point_3d(wid/2, 600, hei/2);
+	view = new point_3d(wid/2, -800/b, hei/2);
+	axis = {
+		x:[new point_3d(-hei/2, 0, 0), new point_3d(hei/2, 0, 0)],
+		y:[new point_3d(0, -hei/2, 0), new point_3d(0, hei/2, 0)],
+		z:[new point_3d(0, 0, -hei/2), new point_3d(0, 0, hei/2)]
+	};
+	
+	ball = [];
+	var m, px, py, pz, x, y, z;
+	px = 0;
+	py = 0;
+	pz = 200;
+	for (i=-180; i<=180; i+=10){
+		for (j=-180; j<=180; j+=10){
+			m = rotation(px, py, pz, i, 1, 0, 0);
+			m = rotation(m[0], m[1], m[2], j, 0, 0, 1);
+			x = m[0];
+			y = m[1];
+			z = m[2];
+			ball.push(new point_3d(x, y, z));
+		}
+	}
+	
+	if (document.cookie == "false")
+		auto = false;
+	
+	show();
+})();
+
+// オブジェクト
+function point_3d(x, y, z){
+	this.x = x;
+	this.y = y;
+	this.z = z;
+}
+
+// 関数
+function rad(a){ return a*Math.PI/180; }
+function sin(a){ return Math.sin(rad(a)); }
+function cos(a){ return Math.cos(rad(a)); }
+function tan(a){ return Math.tan(rad(a)); }
+function sq(a){ return a * a; }
+function rotation(x, y, z, theta, vx, vy, vz){
+	var i, next = [];
+	var array = [
+		[
+			cos(theta) + sq(vx) * (1 - cos(theta)),
+			vx * vy * (1 - cos(theta)) - vz * sin(theta),
+			vx * vz * (1 - cos(theta)) + vy * sin(theta)
+		],
+		[
+			vy * vx * (1 - cos(theta)) + vz * sin(theta),
+			cos(theta) + sq(vy) * (1 - cos(theta)),
+			vy * vz * (1 - cos(theta)) - vx * sin(theta)
+		],
+		[
+			vz * vx * (1 - cos(theta)) - vy * sin(theta),
+			vz * vy * (1 - cos(theta)) + vx * sin(theta),
+			cos(theta) + sq(vz) * (1 - cos(theta))
+		]
+	];
+	for (i in array){
+		next.push(x * array[i][0] + y * array[i][1] + z * array[i][2]);
+	}
+	return next;
+}
+function updateCam(){
+//			camX += 1;
+//			camY += 1;
+	camZ += 1;
+}
+
+// 計算・保存
+function polygon(p){
+	var i, m=[], px, py, pz, ly, x=[], z=[];
+	for (i=0; i<3; i++)
+		m.push(rotation(p[i].x, p[i].y, p[i].z, camX, 1, 0, 0));
+	px = [m[0][0], m[1][0], m[2][0]];
+	py = [m[0][1], m[1][1], m[2][1]];
+	pz = [m[0][2], m[1][2], m[2][2]];
+	for (i=0; i<3; i++)
+		m[i] = rotation(px[i], py[i], pz[i], camY, 0, 1, 0);
+	px = [m[0][0], m[1][0], m[2][0]];
+	py = [m[0][1], m[1][1], m[2][1]];
+	pz = [m[0][2], m[1][2], m[2][2]];
+	for (i=0; i<3; i++)
+		m[i] = rotation(px[i], py[i], pz[i], camZ, 0, 0, 1);
+	px = [m[0][0], m[1][0], m[2][0]];
+	py = [m[0][1], m[1][1], m[2][1]];
+	pz = [m[0][2], m[1][2], m[2][2]];
+	
+	ly = [py[0] - view.y,
+			py[1] - view.y,
+			py[2] - view.y];
+	
+	polygon_tmp.point.push([]);
+	for (i=0; i<3; i++){
+		if (ly[i] !== 0){
+			x.push((px[i] / ly[i]) * mask);
+			z.push((pz[i] / ly[i]) * mask);
+			if (ly[i] < 0){
+				x[i] *= -1;
+				z[i] *= -1;
+			}
+		} else {
+			x.push(px[i]);
+			z.push(pz[i]);
+		}
+	}
+	for (i in x)
+		polygon_tmp.point[polygon_tmp.cnt].push(new point_3d(x[i], py[i], z[i]));
+	polygon_tmp.cnt++;
+}
+
+// 計算2
+function depth(){
+	var yi, yj, tmp, n;
+	var p;
+	for (i=0; i<polygon_tmp.cnt; i++){
+		for (j=polygon_tmp.cnt-1; j>0; j--){
+			p = polygon_tmp.point;
+			yi = (p[i][0].y + p[i][1].y + p[i][2].y) / 3;
+			yj = (p[j][0].y + p[j][1].y + p[j][2].y) / 3;
+			if (yi < yj){
+				tmp = p[i];
+				polygon_tmp.point[i] = p[j];
+				polygon_tmp.point[j] = tmp;
+			}
+		}
+	}
+	tmp = polygon_tmp.point[polygon_tmp.cnt-1];
+	for (i=polygon_tmp.cnt-1; i>0; i--){
+		polygon_tmp.point[i] = polygon_tmp.point[i-1];
+	}
+	polygon_tmp.point[0] = tmp;
+	
+	for (i=0; i<polygon_tmp.cnt; i++){
+		p = polygon_tmp.point[i];
+	}
+}
+
+// 描画
+function g_polygon(){
+	var ly, p, i, j;
+	for (i=0; i<polygon_tmp.cnt; i++){
+		p = polygon_tmp.point[i];
+		ly = p[0].y - view.y;
+		if (ly > 0){
+			ctx.beginPath();
+			ctx.moveTo(center.x + p[0].x, center.z + p[0].z);
+			ctx.lineTo(center.x + p[1].x, center.z + p[1].z);
+			ctx.lineTo(center.x + p[2].x, center.z + p[2].z);
+			ctx.closePath();
+			ctx.fill();
+			ctx.stroke();
+		}
+	}
+	polygon_tmp = {cnt:0, point:[]};
+}
+function line(p1, p2){
+	var m, px, py, pz, ly1, ly2, x1, z1, x2, z2;
+	m = [rotation(p1.x, p1.y, p1.z, camX, 1, 0, 0),
+		rotation(p2.x, p2.y, p2.z, camX, 1, 0, 0)];
+	px = [m[0][0], m[1][0]];
+	py = [m[0][1], m[1][1]];
+	pz = [m[0][2], m[1][2]];
+	m = [rotation(px[0], py[0], pz[0], camY, 0, 1, 0),
+		rotation(px[1], py[1], pz[1], camY, 0, 1, 0)];
+	px = [m[0][0], m[1][0]];
+	py = [m[0][1], m[1][1]];
+	pz = [m[0][2], m[1][2]];
+	m = [rotation(px[0], py[0], pz[0], camZ, 0, 0, 1),
+		rotation(px[1], py[1], pz[1], camZ, 0, 0, 1)];
+	px = [m[0][0], m[1][0]];
+	py = [m[0][1], m[1][1]];
+	pz = [m[0][2], m[1][2]];
+	
+	ly1 = py[0] - view.y;
+	ly2 = py[1]- view.y;
+	if (ly1 !== 0){
+		x1 = (px[0] / ly1) * mask;
+		z1 = (pz[0] / ly1) * mask;
+		if (ly1 < 0){
+			x1 *= -1;
+			z1 *= -1;
+		}
+	} else {
+		x1 = px[0];
+		z1 = pz[0];
+	}
+	if (ly2 !== 0){
+		x2 = (px[1] / ly2) * mask;
+		z2 = (pz[1] / ly2) * mask;
+		if (ly2 < 0){
+			x2 *= -1;
+			z2 *= -1;
+		}
+	} else {
+		x2 = px[1];
+		z2 = pz[1];
+	}
+	ctx.beginPath();
+	ctx.moveTo(center.x + x1, center.z + z1);
+	ctx.lineTo(center.x + x2, center.z + z2);
+	ctx.stroke();
+}
+function arc(p, r, s){
+	var m, px, py, pz, ly, x, z;
+	m = rotation(p.x, p.y, p.z, camX, 1, 0, 0);
+	px = m[0];
+	py = m[1];
+	pz = m[2];
+	m = rotation(px, py, pz, camY, 0, 1, 0);
+	px = m[0];
+	py = m[1];
+	pz = m[2];
+	m = rotation(px, py, pz, camZ, 0, 0, 1);
+	px = m[0];
+	py = m[1];
+	pz = m[2];
+	
+	ly = py - view.y;
+	if (ly !== 0){
+		x = (px / ly) * mask;
+		z = (pz / ly) * mask;
+	} else {
+		x = px;
+		z = pz;
+	}
+	if (ly > 0){
+		ctx.beginPath();
+		ctx.arc(center.x + x, center.z + z, r, 0, Math.PI*2, false);
+		if (s=='f') ctx.fill();
+		if (s=='s') ctx.stroke();
+	}
+}
+function guide(){
+	ctx.strokeStyle = "rgb(128,0,0)";
+	line(axis.x[0], axis.x[1]);
+	ctx.strokeStyle = "rgb(0,128,0)";
+	line(axis.y[0], axis.y[1]);
+	ctx.strokeStyle = "rgb(0,0,128)";
+	line(axis.z[0], axis.z[1]);
+	
+	ctx.fillStyle = ctx.strokeStyle = "red";
+	ctx.beginPath();
+	ctx.arc(center.x, center.z, 5, 0, Math.PI*2, false);
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.arc(view.x, view.z, 3, 0, Math.PI*2, false);
+	ctx.fill();
+}
+
+function show(){
+	var px, py, pz, m;
+	ctx.fillStyle = "white";
+	ctx.fillRect(0, 0, wid, hei);
+	
+	//g_sphere(-200, 0, 0, 100, 2);
+	g_sphere(-150, 0, 0, 100, 6);
+	g_box( 150, 0, 0, 100);
+	//g_sphere( 200, 0, 0, 100, 4);
+	
+	depth();
+	
+	if (auto){
+		updateCam();
+	}
+	
+	ctx.fillStyle = "red";
+	ctx.strokeStyle = "black";
+	g_polygon();
+	
+	if (a < 360)
+		a+=10;
+	else
+		a = 0;
+	
+	cnt++;
+	if (cnt >= 3600)
+		cnt = 360;
+	
+	document.cookie = auto;
+	
+	requestAnimationFrame(show);
+}
+canvas.addEventListener('mousedown', function(e){
+	var rect = canvas.getBoundingClientRect();
+	camTmp.x = e.clientX - rect.left;
+	camTmp.z = e.clientY - rect.top;
+	camTmp.px = camZ;
+	camTmp.pz = camX;
+	camE = true;
+});
+canvas.addEventListener('mousemove', function(e){
+	if (camE){
+		var rect = canvas.getBoundingClientRect();
+		var X = e.clientX - rect.left;
+		var Y = e.clientY - rect.top;
+		var tmp = {x:X - camTmp.x, z:camTmp.z - Y};
+		camZ = camTmp.px + tmp.x;
+		camX = camTmp.pz + tmp.z;
+	}
+});
+canvas.addEventListener('mouseup', function(){
+	camE = false;
+});
+		</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title></title>
+</head>
+<body>
+	<div align="center">
+		<h1><a href="c.html">次へ</a></h1>
+		<canvas></canvas>
+	</div>
+	<script>
+		var canvas, ctx, wid, hei, mask_2d, view, center, rote=0;
+		ctx = (canvas = document.getElementsByTagName("canvas")[0]).getContext("2d");
+		canvas.style = "border:1px solid black;";
+		wid = canvas.width = 640;
+		hei = canvas.height = 480;
+		
+		(function(){
+			mask_2d = 700;
+			view = new point_3d(wid/2, 0, hei/2);
+			center = new point_3d(wid/2, 1000, hei/2);
+			
+			draw();
+		})();
+		
+		function rad(a){ return a*Math.PI/180; }
+		function sq(a){ return a*a; }
+		
+		function point_3d(x, y, z){
+			this.x = x;
+			this.y = y;
+			this.z = z;
+		}
+		
+		function graph(){
+			ctx.strokeStyle = ctx.fillStyle = "red";
+			// 視点
+			ctx.beginPath();
+			ctx.arc(view.x, view.z, 5, 0, Math.PI*2, false);
+			ctx.stroke();
+			// 中心
+			ctx.beginPath();
+			ctx.arc(view.x, view.z, 3, 0, Math.PI*2, false);
+			ctx.fill();
+			
+			cube(300);
+		}
+		
+		function cube(l){
+			var x, y, z, ly, ax, az, p=[];
+			ctx.fillStyle = "green";
+			for (var i=-1; i<2; i+=2){
+				for (var j=0; j<4; j++){
+					x = l * Math.cos(rad(45+j*90 + (i+2)*90 + rote)) * Math.sin(rad(45*i +rote));
+					y = center.y + l * Math.sin(rad(45)) * Math.sin(rad(45+i*90 +rote))
+					z = l * Math.sin(rad(45+j*90 + (i+2)*90 + rote)) * Math.sin(rad(45*i));
+					
+					ly = y - view.y;
+					ax = x / ly;
+					az = z / ly;
+					
+					x = ax * mask_2d + center.x;
+					z = az * mask_2d + center.z;
+					
+					p.push([x, z]);
+					
+					ctx.beginPath();
+					ctx.arc(x, z, 3, 0, Math.PI*2, false);
+					ctx.fill();
+				}
+			}
+			for (var i=0; i<=1; i++){
+				ctx.beginPath();
+				ctx.moveTo(p[0+i*4][0], p[0+i*4][1]);
+				for (var j=1; j<4; j++){
+					ctx.lineTo(p[j+i*4][0], p[j+i*4][1]);
+				}
+				ctx.closePath();
+				ctx.stroke();
+			}
+			for (var i=0; i<4; i++){
+				ctx.beginPath();
+				ctx.moveTo(p[i][0], p[i][1]);
+				ctx.lineTo(p[i+4][0], p[i+4][1]);
+				ctx.stroke();
+			}
+		}
+		
+		function draw(){
+			ctx.fillStyle = "white";
+			ctx.fillRect(0, 0, wid, hei);
+			graph();
+			
+			if (rote < 360)
+				rote++;
+			else
+				rote = 0;
+			requestAnimationFrame(draw);
+		}
+	</script>
+</body>
+</html>
