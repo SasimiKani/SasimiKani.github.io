@@ -39,11 +39,17 @@ function update() {
 					}
 				}
 			}
-			if (find < 2 || 4 <= find) {
-				board[i][j] = 0;
-			}
-			if (find == 3) {
-				board[i][j] = 1;
+			if (tmp[i][j] == 0) {
+				if (find == 3) {
+					board[i][j] = 1;
+				}
+			} else {
+				if (find == 2 || find == 3) {
+					board[i][j] = 1;
+				}
+				if (find <= 1 || 4 <= find) {
+					board[i][j] = 0;
+				}
 			}
 		}
 	}
@@ -65,5 +71,5 @@ function update() {
 
 (function() {
 	update();
-	setInterval(function(){update();}, 1000);
+	setInterval(function(){update();}, 50);
 })();
