@@ -12,20 +12,19 @@ var box = {
 		ctx.fillRect(x * this.size, y * this.size, this.size, this.size);
 	}
 };
-
-(function() {
-	var o = {x: width/2, y: height/2};
-	o.w = o.x < o.y ? o.y : o.x;
-	var board = [];
-	var cnt = 0;
-	for (var i=0; (i + 1) * box.size < o.w; i++) {
-		board.push([]);
-		for (var j=0; (j + 1) * box.size < o.w; j++) {
-			board[i].push(Math.random() < 0.5 ? 0 : 1);
-		}
-		cnt++;
+var o = {x: width/2, y: height/2};
+o.w = o.x < o.y ? o.y : o.x;
+var board = [];
+var cnt = 0;
+for (var i=0; (i + 1) * box.size < o.w; i++) {
+	board.push([]);
+	for (var j=0; (j + 1) * box.size < o.w; j++) {
+		board[i].push(Math.random() < 0.5 ? 0 : 1);
 	}
-	
+	cnt++;
+}
+
+function update() {
 	var tmp = board.map(x => x);
 	
 	for (var i=0; i<cnt; i++) {
@@ -40,15 +39,18 @@ var box = {
 					}
 				}
 			}
-			if (find < 1 || 3 < find) {
+			if (find < 2 || 4 <= find) {
 				board[i][j] = 0;
 			}
-			if (2 <= find && find <= 3) {
+			if (find == 3) {
 				board[i][j] = 1;
 			}
 		}
 	}
 	
+	ctx.fillStyle = "white";
+	ctx.fillRect(0, 0, width, height);
+	ctx.fillStyle = box.color;
 	for (var i=0; i<cnt; i++) {
 		for (var j=0; j<cnt; j++) {
 			if (board[i][j] == 1) {
@@ -59,4 +61,11 @@ var box = {
 			}
 		}
 	}
+}
+
+(function() {
+	update();
 })();
+canvas.addEventListener('click', function() {
+	update();
+});
