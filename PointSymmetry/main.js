@@ -65,7 +65,10 @@ function update() {
 
 (function() {
 	update();
+	setInterval(function(){update();}, 1000);
 })();
+/*
 canvas.addEventListener('click', function() {
 	update();
 });
+*/
