@@ -1,13 +1,23 @@
 body {
 	background-color:#eee;
 }
-ul {
-	display: flex;
-	margin: 0 auto;
+
+.container {
+	display: grid;
 }
-li {
-	list-style-type: none;
+.gtid-item {
+	grid-row: 1/2;
 }
+.grid-item.kani-sasimi {
+	grid-column: 1/2;
+}
+.grid-item.sasimi-kani {
+	grid-column: 2/3;
+}
+.grid-item.kyuu-iroo {
+	grid-column: 3/4;
+}
+
 .account::before {
 	content: "🦀";
 }
@@ -15,9 +25,6 @@ li {
 	margin-bottom: 3px;
 }
 .twitter {
-	width: 370px;
+	width: auto;
 	margin:0 5px;
-}
-.twitter-timeline {
-	height: 600px;
 }
