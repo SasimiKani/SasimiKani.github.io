@@ -67,8 +67,3 @@ function update() {
 	update();
 	setInterval(function(){update();}, 1000);
 })();
-/*
-canvas.addEventListener('click', function() {
-	update();
-});
-*/
