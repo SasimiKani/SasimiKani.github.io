@@ -71,5 +71,5 @@ function update() {
 
 (function() {
 	update();
-	setInterval(function(){update();}, 50);
+	setInterval(function(){update();}, 500);
 })();
