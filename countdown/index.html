@@ -39,10 +39,10 @@
 		var time = document.getElementById("time");
 		var date = new Date();
 		time.innerText  = date.getFullYear() + "/";
-		time.innerText += date.getMonth() +1 + "/";
-		time.innerText += date.getDate()     + "　";
+		time.innerText += ("00" + (date.getMonth()+1)).slice(-2) + "/";
+		time.innerText += ("00" + date.getDate()).slice(-2) + "　";
 		time.innerText += ("00" + date.getHours()).slice(-2) + ":";
-		time.innerText += ("00" + date.getMinutes()).slice(-2)  + ":";
+		time.innerText += ("00" + date.getMinutes()).slice(-2) + ":";
 		time.innerText += ("00" + date.getSeconds()).slice(-2);
 		
 		progress();
