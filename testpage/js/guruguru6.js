@@ -107,7 +107,7 @@ function pen(x, y, r, v, t, parent=null) {
 var p;
 function init() {
 	function R(k) {
-		return 70 / k;
+		return (width < height ? width / 5 : height / 5) / k;
 	}
 	function V(k) {
 		return Math.random()*k+1;
