@@ -118,7 +118,7 @@ function init() {
 	
 	p = [];
 	for (var n=0; n<2; n++) {
-		for (var i=0, k=1; i<30; i++, k++) {
+		for (var i=0, k=1; i<25; i++, k++) {
 			i == 0 ? 
 				p.push(new pen(width/2, height/2, R(k), V(k), T(k))) :
 				p[n].insertChild(R(k), V(k), T(k));
