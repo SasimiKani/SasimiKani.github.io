@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title></title>
+</head>
+<body>
+	<p>
+		文字化け<br>
+		<textarea id="bake" cols="50" rows="6"></textarea>
+	</p>
+	<p>
+		<input type="submit" id="decode" value="decode↓" onclick="decode()">
+		<input type="submit" id="encode" value="encode↑" onclick="encode()"><br>
+		<textarea id="hira" cols="50" rows="6"></textarea>
+	</p>
+	
+<script>
+
+var bake = document.getElementById("bake");
+var hira = document.getElementById("hira");
+
+function d2b(n) {
+	var b = "", w;
+	while (n > 0) {
+		w = "" + n % 2;
+		n = parseInt(n / 2);
+		b = w + b;
+	}
+	return ("0000000000000000" + b).slice(-16);
+}
+function b2d(b) {
+	var d = 0;
+	for (var i=0; i<b.length; i++) {
+		var dig = parseInt(b[i]);
+		d += Math.pow(2, b.length - 1 - i) * dig;
+	}
+	return d;
+}
+
+// 解析
+function decode() {
+	var str = bake.value;
+	
+//	str = str.split("").map(c => c.charCodeAt());
+	str = str.split("").map(c => d2b(c.charCodeAt()));
+	
+	hira.value = str;
+}
+
+// 化け
+function encode() {
+	var str = hira.value;
+	
+	str = str.split(",").map(s => String.fromCharCode(b2d(s))).join("");
+	
+	bake.value = str;
+}
+
+</script>
+</body>
+</html>
