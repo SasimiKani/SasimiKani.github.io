@@ -6,7 +6,34 @@
 </head>
 <body>
 	<div align="center" style="font-size:42px;">
-		2025/3/19まで <script language="JavaScript" src="https://www.nannichime.net/s.php?d=2025/3/19"></script>
+		<p id="left"><script language="JavaScript" src="https://www.nannichime.net/s.php?d=2025/3/19"></script></p>
+		<p><canvas id="progress"></canvas></p>
 	</div>
+	<script>
+	var displayWidth = window.innerWidth * 0.9;
+	var canvas, ctx, width, height;
+	ctx = (canvas = document.getElementById("progress")).getContext("2d");
+	canvas.width = width = displayWidth;
+	canvas.height = height = 10;
+	canvas.style = "top:0; left:0; border:1px solid black;";
+	
+	(function(){
+		progress();
+	})();
+	
+	function get() {
+		var d = "";
+		var s = document.getElementById("left").childNodes[1].textContent.split("あと")[1].split("日")[0];
+		var spl = s.split(",");
+		for (var i in spl) {
+			d += spl[i];
+		}
+		return parseInt(d);
+	}
+	function progress() {
+		ctx.fillStyle = "#080";
+		ctx.fillRect(0, 0, width - get() / 1594 * displayWidth, height);
+	}
+	</script>
 </body>
 </html>
