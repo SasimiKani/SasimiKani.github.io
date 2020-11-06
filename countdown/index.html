@@ -7,6 +7,7 @@
 <body>
 	<div align="center" style="font-size:42px;">
 		<p id="left"><script language="JavaScript" src="https://www.nannichime.net/s.php?d=2025/3/19"></script></p>
+		<p id="time"></p>
 		<p><canvas id="progress"></canvas></p>
 	</div>
 	<script>
@@ -18,7 +19,7 @@
 	canvas.style = "top:0; left:0; border:1px solid black;";
 	
 	(function(){
-		progress();
+		a();
 	})();
 	
 	function get() {
@@ -33,6 +34,19 @@
 	function progress() {
 		ctx.fillStyle = "#080";
 		ctx.fillRect(0, 0, width - get() / 1594 * displayWidth, height);
+	}
+	function a() {		
+		var time = document.getElementById("time");
+		var date = new Date();
+		time.innerText  = date.getFullYear() + "/";
+		time.innerText += date.getMonth() +1 + "/";
+		time.innerText += date.getDate()     + "　";
+		time.innerText += ("00" + date.getHours()).slice(-2) + ":";
+		time.innerText += ("00" + date.getMinutes()).slice(-2)  + ":";
+		time.innerText += ("00" + date.getSeconds()).slice(-2);
+		
+		progress();
+		requestAnimationFrame(a);
 	}
 	</script>
 </body>
