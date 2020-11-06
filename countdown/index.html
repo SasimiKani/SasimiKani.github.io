@@ -2,10 +2,12 @@
 <html lang="ja">
 <head>
 	<meta charset="utf-8">
-	<title></title>
+	<title>あと</title>
+	<link rel="stylesheet" href="css/phone.css" media="screen and (min-width:480px) and (max-width:1024px)">
+	<link rel="stylesheet" href="css/style.css" media="screen and (min-width:1024px)">
 </head>
 <body>
-	<div align="center" style="font-size:42px;">
+	<div id="content">
 		<p id="left"><script language="JavaScript" src="https://www.nannichime.net/s.php?d=2025/3/19"></script></p>
 		<p id="time"></p>
 		<p><canvas id="progress"></canvas></p>
@@ -46,6 +48,7 @@
 		time.innerText += ("00" + date.getSeconds()).slice(-2);
 		
 		progress();
+		document.title = "あと" + get() + "日";
 		requestAnimationFrame(a);
 	}
 	</script>
