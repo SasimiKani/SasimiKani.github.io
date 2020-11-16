@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title></title>
+</head>
+<body>
+	<div align="center">
+		<button type="button" onclick="defoko();">デフォ子かわいいよデフォ子</button>
+	</div>
+	<script>
+	function defoko() {
+		var a = "デフォ子かわいいよデフォ子".split("");
+		var href = "https://twitter.com/compose/tweet?text=";
+		while (a.length > 0) {
+			var index = parseInt(Math.random() * a.length);
+			href += a.splice(index, 1);
+		}
+		open(href, "_blank");
+	}
+	</script>
+</body>
+</html>
