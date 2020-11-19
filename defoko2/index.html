@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:site" content="@kani_sasimi" />
+	<meta property="og:url" content="https://sasimikani.github.io/defoko/" />
+	<meta property="og:title" content="デフォ子がかわいいボタン" />
+	<meta property="og:description" content="デフォ子かわいいよデフォ子" />
+	<meta property="og:image" content="https://sasimikani.github.io/defoko/media/defoko.png" />
+	<title>デフォ子かわいいよデフォ子</title>
+</head>
+<body>
+	<p id="text"></p>
+	<script>
+	window.onload = function() {
+		aaa();
+	}
+	var cnt = 0, one = 0, two = 0, three = 0;
+	function aaa() {
+		var a = "デフォ子かわいいよデフォ子".split("");
+		var href = "https://twitter.com/compose/tweet?text=";
+		while (a.length > 0) {
+			var index = parseInt(Math.random() * a.length);
+			href += a.splice(index, 1);
+		}
+		let reg1 = /デフォ子/g;
+		let reg2 = /かわいいよ/g;
+		var a = href.match(reg1);
+		var b = href.match(reg2);
+		var res = (a == null ? [] : a).concat(b == null ? [] : b);
+		document.getElementById("text").innerText  = one + " " + two + " " + three + "\n";
+		document.getElementById("text").innerText += cnt + "\n" + href + "\n" + res;
+		if (res.length == 1) one++;
+		if (res.length == 2) two++;
+		if (res.length == 3) {
+			three++;
+			alert("hit " + res.length)
+		};
+		
+		cnt++;
+		requestAnimationFrame(aaa);
+		//location.href = href + "%0A%23ランダムデフォ子かわいいよデフォ子%0Ahttps://t.co/VptRCjDZ7j?amp=1";
+	}
+	</script>
+</body>
+</html>
