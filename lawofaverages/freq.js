@@ -1,6 +1,6 @@
 var canvas, ctx, width, height;
 ctx = (canvas = document.getElementById("canvas")).getContext("2d");
-canvas.width = width = 640;
+canvas.width = width = window.innerWidth - 20;
 canvas.height = height = window.innerHeight - 200;
 canvas.style = "border:1px solid black;";
 
