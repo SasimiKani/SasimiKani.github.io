@@ -2,22 +2,32 @@
 <html lang="ja">
 <head>
 	<meta charset="utf-8">
-	<title></title>
+	<title>グラフィカル平均律計算機</title>
+	<style>
+	input {
+		font-size:150%;
+	}
+	#view {
+	}
+	#controls {
+		margin-left:20px;
+	}
+	</style>
 </head>
 <body>
-	<div id="view" style="float:left;">
+	<div id="view">
 		<canvas id="canvas"></canvas>
 	</div>
-	<div id="controls" style="float:left; margin-left:20px;">
-		start <input type="number" id="start" value="440">
-		<br>scale <input type="text" id="scale" value="1">
-		<br>offsetx <input type="number" id="offsetx" value="50">
-		<br>offsety <input type="number" id="offsety" value="350">
-		<br>len <input type="number" id="len" value="40">
-		<br><input type="number" id="law" value="12"> 平均律
+	<div id="controls">
+		start <input type="number" id="start" value="440" size="5">
+		scale <input type="text" id="scale" value="1" size="5">
+		<br>offsetx <input type="number" id="offsetx" value="50" size="5">
+		offsety <input type="number" id="offsety" value="350" size="5">
+		<br>len <input type="number" id="len" value="40" size="5">
+		<input type="number" id="law" value="12" size="5"> 平均律
 		<br>Hz <input type="radio" id="hz" name="notation" value="0" checked>
-		<br>¢ <input type="radio" id="cent" name="notation" value="1">
-		<br>abc <input type="radio" id="abc" name="notation" value="2">
+		¢ <input type="radio" id="cent" name="notation" value="1">
+		abc <input type="radio" id="abc" name="notation" value="2">
 	</div>
 	<script src="freq.js"></script>
 </body>
