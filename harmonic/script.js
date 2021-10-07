@@ -19,6 +19,10 @@ function d(id) {
 	return document.getElementById(id);
 }
 
+function law2radix(r) {
+	return Math.pow(2, 1 / r);
+}
+
 function aaa() {
 	ctx.clearRect(0, 0, width, height);
 	
@@ -73,5 +77,20 @@ for (var i in iList) {
 		if (this.value != "") {
 			aaa();
 		}
+	});
+}
+
+var iList = [
+	"law",
+	"pattern"
+];
+for (var i in iList) {
+	d(iList[i]).addEventListener("keyup", function() {
+		d("radix").value = Math.pow(law2radix(d("law").value), d("pattern").value);
+		aaa();
+	});
+	d(iList[i]).addEventListener("change", function() {
+		d("radix").value = Math.pow(law2radix(d("law").value), d("pattern").value);
+		aaa();
 	});
 }
