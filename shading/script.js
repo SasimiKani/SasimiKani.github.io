@@ -115,7 +115,7 @@ function aaa() {
 		}
 		for (var j in faces) {
 			c[j] = rotate(c[j], new Vector(0, 0, 1), 0);
-			ctx.fillStyle = "rgba("+(c[j].y+128)+","+(c[j].y+64)+","+(c[j].y+256)+", 0.1)";
+			ctx.fillStyle = "rgba("+(c[j].y+128)+","+(c[j].y+128)+","+(c[j].y+128)+", 0.1)";
 			
 			ctx.beginPath();
 			for (var k in faces[j]) {
