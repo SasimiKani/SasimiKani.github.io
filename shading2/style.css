@@ -1,0 +1,30 @@
+#canvas {
+	cursor: grab;
+}
+p {
+	line-height: 2px;
+}
+span#brightness {
+	display: inline-block;
+	height: 20px;
+	margin: 0;
+	border: 1px solid black;
+	border-radius: 10px;
+	padding: 0 5px;
+}
+label.radio {
+	display: block;
+	float: left;
+	width: 20px;
+	height: 16px;
+	margin: 0;
+	border-top: 2px solid white;
+	border-bottom: 2px solid white;
+	border-radius: 10px;
+}
+input[type="radio"] {
+	display: none;
+}
+input[type="radio"]:checked + .radio {
+	background-color: black;
+}

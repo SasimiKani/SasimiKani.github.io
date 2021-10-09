@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title></title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<canvas id="canvas"></canvas>
+	<div>
+		<p>光度</p>
+		<span class="radio" id="brightness">
+			<input id="10" type="radio" name="brightness" value="10"   onclick="setBrightness(this.value)"         /><label for="10" class="radio"></label>
+			<input id="20" type="radio" name="brightness" value="20"   onclick="setBrightness(this.value)"         /><label for="20" class="radio"></label>
+			<input id="30" type="radio" name="brightness" value="30"   onclick="setBrightness(this.value)"         /><label for="30" class="radio"></label>
+			<input id="40" type="radio" name="brightness" value="40"   onclick="setBrightness(this.value)"         /><label for="40" class="radio"></label>
+			<input id="50" type="radio" name="brightness" value="50"   onclick="setBrightness(this.value)"         /><label for="50" class="radio"></label>
+			<input id="60" type="radio" name="brightness" value="60"   onclick="setBrightness(this.value)"         /><label for="60" class="radio"></label>
+			<input id="70" type="radio" name="brightness" value="70"   onclick="setBrightness(this.value)"         /><label for="70" class="radio"></label>
+			<input id="80" type="radio" name="brightness" value="80"   onclick="setBrightness(this.value)"         /><label for="80" class="radio"></label>
+			<input id="90" type="radio" name="brightness" value="90"   onclick="setBrightness(this.value)"         /><label for="90" class="radio"></label>
+			<input id="100" type="radio" name="brightness" value="100" onclick="setBrightness(this.value)" checked /><label for="100" class="radio"></label>
+		</span>
+	</div>
+	<ul>
+		<li>マウス操作</li>
+		<ol>
+			<li>ドラッグ：箱回転</li>
+		</ol>
+		<li>キーボード操作</li>
+		<ol>
+			<li>WASD：カメラ操作</li>
+			<li>←↓↑→：全体移動</li>
+			<li>テンキー8462：光源移動</li>
+			<li>Shift：ズームイン</li>
+			<li>Ctrl：ズームアウト</li>
+		</ol>
+	</ul>
+	<script src="quaternion.js"></script>
+	<script src="keys.js"></script>
+	<script src="key.js"></script>
+	<script src="Shapes.js"></script>
+	<script src="Cube.js"></script>
+	<script src="Point.js"></script>
+	<script src="script.js"></script>
+	<script src="touchscript.js"></script>
+</body>
+</html>
