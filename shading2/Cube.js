@@ -35,8 +35,8 @@ var Cube = function(pos, size, color=new Vector(0, 0, 50), name="cube") {
 Cube.prototype.rotation = function(rx, ry) {
 	for (var i in this.p) {
 		// 四元数計算 a: 座標 u: 回転軸 ang: 回転角度
-		var c = rotate(this.b[i], new Vector(0, 1, 0), rx);
-		c = rotate(c, new Vector(1, 0, 0), ry);
+		var c = rotate(this.b[i], rotate(new Vector(0, 1, 0), new Vector(1, 0, 0), -camX), rx);
+		c = rotate(c, rotate(new Vector(1, 0, 0), new Vector(0, 1, 0), -camY), ry);
 		this.b[i] = c;
 	}
 };
