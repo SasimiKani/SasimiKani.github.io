@@ -7,8 +7,10 @@
 <body>
 	<input id="char"><br>
 	<input id="yomi"><br>
-	<input type="submit" id="gen" value="作成"><br>
-	<input id="punch">
+	<input type="button" id="gen" value="作成"><br>
+	<input id="punch"><br>
+	<input type="button" id="tweet" value="ツイート">
+	<input type="button" id="copy" value="コピー"><span style="margin-left:10px;" id="msg"></span><br>
 	<script>
 	function punch() {
 		var c = document.getElementById("char").value;
@@ -23,6 +25,21 @@
 	});
 	document.getElementById("gen").addEventListener("click", function() {
 		punch();
+	});
+	document.getElementById("tweet").addEventListener("click", function() {
+		var tweet = document.getElementById("punch").value;
+		window.open("https://twitter.com/intent/tweet?text=" + tweet);
+	});
+	document.getElementById("copy").addEventListener("click", function() {
+		var target = document.getElementById("punch");
+		target.select();
+		document.execCommand("Copy");
+		
+		document.getElementById("msg").innerText = "コピーしました";
+		setTimeout(function() {
+			document.getElementById("msg").innerText = "";
+		}, 1500);
+		
 	});
 	</script>
 </body>
