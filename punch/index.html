@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title>ﾊﾟﾝﾁ</title>
+</head>
+<body>
+	<form action="/index.html">
+		<input id="char"><br>
+		<input id="yomi"><br>
+		<input type="submit" id="gen" value="作成"><br>
+		<input id="punch">
+	</form>
+	<script>
+	document.getElementById("gen").addEventListener("click", function() {
+		var c = document.getElementById("char").value;
+		var yomi = document.getElementById("yomi").value;
+		document.getElementById("punch").value = c + "( '-' " + c + " )" + yomi +"ﾁｬﾝ";
+	});
+	</script>
+</body>
+</html>
