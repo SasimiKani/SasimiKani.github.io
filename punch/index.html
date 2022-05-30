@@ -5,17 +5,24 @@
 	<title>ﾊﾟﾝﾁ</title>
 </head>
 <body>
-	<form action="/punch/">
-		<input id="char"><br>
-		<input id="yomi"><br>
-		<input type="submit" id="gen" value="作成"><br>
-		<input id="punch">
-	</form>
+	<input id="char"><br>
+	<input id="yomi"><br>
+	<input type="submit" id="gen" value="作成"><br>
+	<input id="punch">
 	<script>
-	document.getElementById("gen").addEventListener("click", function() {
+	function punch() {
 		var c = document.getElementById("char").value;
 		var yomi = document.getElementById("yomi").value;
 		document.getElementById("punch").value = c + "( '-' " + c + " )" + yomi +"ﾁｬﾝ";
+	}
+	document.getElementById("char").addEventListener("keypress", function(e) {
+		if (e.key = "Enter") punch();
+	});
+	document.getElementById("yomi").addEventListener("keypress", function(e) {
+		if (e.key = "Enter") punch();
+	});
+	document.getElementById("gen").addEventListener("click", function() {
+		punch();
 	});
 	</script>
 </body>
