@@ -19,10 +19,12 @@
 		document.getElementById("punch").value = c + "( '-' " + c + " )" + yomi +"ﾁｬﾝ";
 	}
 	document.getElementById("char").addEventListener("keypress", function(e) {
-		if (e.key = "Enter") punch();
+		console.log(e.key);
+		if (e.key == "Enter") punch();
 	});
 	document.getElementById("yomi").addEventListener("keypress", function(e) {
-		if (e.key = "Enter") punch();
+		console.log(e.key);
+		if (e.key == "Enter") punch();
 	});
 	document.getElementById("gen").addEventListener("click", function() {
 		punch();
