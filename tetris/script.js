@@ -57,8 +57,8 @@ function rotateBlock(tBlock, r) {
 		newBlock.push([x, y]);
 		
 		if (!isOutRange[0]) {
-			if (x + now[0] < 0) isOutRange[0] = 1;
-			if (hSize <= x + now[0]) isOutRange[0] = -1;
+			if (x + now[0] < 0 || fieldBlocks[y + now[1]][x + now[0]] > -1 && x < 0) isOutRange[0] = 1;
+			if (hSize <= x + now[0] || fieldBlocks[y + now[1]][x + now[0]] > -1 && x > 0) isOutRange[0] = -1;
 		}
 		if (!isOutRange[1] && y + now[1] < 0) isOutRange[1] = 1;
 	}
@@ -115,8 +115,6 @@ function main() {
 	}
 	viewBlock(now[0], now[1], now[2], now[3]);
 	
-	decision();
-	
 	requestAnimationFrame(main);
 }
 
@@ -154,12 +152,16 @@ function decision() {
 
 addEventListener("keydown", function(e) {
 	function checkRange(mv) {
-		var x, tBlock;
+		var x, y, tBlock;
 		tBlock = rotateBlock(now[2], now[3]);
 		
+		x = now[0];
+		y = now[1];
+		if (x + mv < 0 || hSize <= x + mv || fieldBlocks[y][x + mv] > -1) return false;
 		for (var i=0; i<3; i++) {
 			x = tBlock[i][0] + now[0];
-			if (x + mv < 0 || hSize <= x + mv) return false;
+			y = tBlock[i][1] + now[1];
+			if (x + mv < 0 || hSize <= x + mv || fieldBlocks[y][x + mv] > -1) return false;
 		}
 		return true;
 	}
@@ -181,6 +183,8 @@ addEventListener("keydown", function(e) {
 		now[3] = (now[3] + 3) % 4;
 		break;
 	}
+	
+	decision();
 });
 
 for (var i=0; i<vSize; i++) {
