@@ -2,7 +2,7 @@ var canvas, ctx, width, height;
 canvas = document.querySelector("canvas");
 ctx = canvas.getContext("2d");
 
-var blockSize = 30, hSize = 10, vSize = 20;
+var blockSize = 20, hSize = 20, vSize = 30;
 width = canvas.width = blockSize * hSize;
 height = canvas.height = blockSize * vSize;
 canvas.style = "border: 1px solid black;";
@@ -124,11 +124,11 @@ function checkBlock() {
 	
 	x = now[0];
 	y = now[1];
-	if (y == 19 || fieldBlocks[y+1][x] > -1) return true;
+	if (y == vSize - 1 || fieldBlocks[y+1][x] > -1) return true;
 	for (var i=0; i<3; i++) {
 		x = tBlock[i][0] + now[0];
 		y = tBlock[i][1] + now[1];
-		if (y == 19 || fieldBlocks[y+1][x] > -1) return true;
+		if (y == vSize - 1 || fieldBlocks[y+1][x] > -1) return true;
 	}
 	return false;
 }
