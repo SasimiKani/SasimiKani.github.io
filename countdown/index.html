@@ -9,7 +9,8 @@
 </head>
 <body>
 	<div id="content">
-		2025/10/30まで<p id="left"><script language="JavaScript" src="https://www.nannichime.net/s.php?d=2025/10/30"></script></p>
+		2025/10/30まで<span id="left"><script language="JavaScript" src="https://www.nannichime.net/s.php?d=2025/10/30"></script></span>
+		<span id="right"></span>
 		<p id="time"></p>
 		<p><canvas id="progress"></canvas></p>
 	</div>
@@ -20,6 +21,21 @@
 	canvas.width = width = displayWidth;
 	canvas.height = height = 10;
 	canvas.style = "top:0; left:0; border:1px solid black;";
+	
+	function calcDaysBetween(startDate, endDate) {
+		// 日付オブジェクトに変換
+		startDate = new Date(startDate);
+		endDate = new Date(endDate);
+
+		// ミリ秒単位での日数差を計算
+		const timeDifference = endDate.getTime() - startDate.getTime();
+
+		// 日数に変換して返す
+		return Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+	}
+	var sd = "2023-6-18";
+	var ed = "2025-10-30";
+	var w = calcDaysBetween(sd, ed); // 2023年6月18日～2025年10月30日の日数
 	
 	(function(){
 		a();
@@ -36,7 +52,7 @@
 	}
 	function progress() {
 		ctx.fillStyle = "#080";
-		ctx.fillRect(0, 0, width - get() / 804 * displayWidth, height);
+		ctx.fillRect(0, 0, width - get() / w * displayWidth, height);
 	}
 	function grid(n, color) {
 		var l = width / n;
@@ -65,6 +81,9 @@
 		grid(2 , "#f00");
 		
 		document.title = "2025/10/30まで　あと" + get() + "日";
+		
+		document.getElementById("right").innerText = "(" + (Math.ceil((w - get()) / w * 100*10)/10) + "%" + ")";
+		
 		requestAnimationFrame(a);
 	}
 	</script>
