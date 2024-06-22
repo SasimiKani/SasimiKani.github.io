@@ -1,3 +1,7 @@
+#err {
+	color: red;
+	font-size: 14px;
+}
 label {
 	color: gray;
 	font-size: 14px;

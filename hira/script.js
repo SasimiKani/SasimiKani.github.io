@@ -109,13 +109,27 @@ function f(s) {
 	return result;
 }
 
+function get_hira() {
+	try {
+		bf = document.querySelector("#hira").value;
+		test = [...bf].map(x => hira.indexOf(x)); // ひらがな以外が入力されると-1が入る
+		if (test.indexOf(-1) > -1) {
+			throw new Error("ひらがなだけ入力してください");
+		}
+		return bf;
+	} catch (e) {
+		document.querySelector("#err").innerText = e.message;
+		setTimeout(function() {
+			document.querySelector("#err").innerText = "";
+		}, 1500);
+	}
+}
+
 document.querySelector("#trans").addEventListener("click", function() {
-	bf = document.querySelector("#hira").value;
-	document.querySelector("#roma").value = f(bf);
+	document.querySelector("#roma").value = f(get_hira());
 });
 document.querySelector("#trans_rev").addEventListener("click", function() {
-	bf = document.querySelector("#hira").value;
-	document.querySelector("#roma").value = [...f(bf)].reverse().join('');
+	document.querySelector("#roma").value = [...f(get_hira())].reverse().join('');
 });
 
 document.querySelector("#copy").addEventListener("click", function() {
@@ -123,8 +137,8 @@ document.querySelector("#copy").addEventListener("click", function() {
 	target.select();
 	document.execCommand("Copy");
 	
-	document.getElementById("msg").innerText = "コピーしました";
+	document.querySelector("#msg").innerText = "コピーしました";
 	setTimeout(function() {
-		document.getElementById("msg").innerText = "";
+		document.querySelector("#msg").innerText = "";
 	}, 1500);
 });
