@@ -1,0 +1,14 @@
+label {
+	font-size: 18px;
+}
+input[type="text"] {
+	height: 30px;
+	font-size: 20px;
+}
+input[type="button"] {
+	width: 99%;
+	height: 24px;
+}
+input[type="button"]:hover {
+	background-color: #ddd;
+}
