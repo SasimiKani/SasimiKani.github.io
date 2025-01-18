@@ -32,11 +32,16 @@
 	<div id="main">
 		<h1>sitelen pona</h1>
 		<input id="a" type="text" size="100">
+		<div id="suggests">
+			<textarea id="suggests_area" rows="5" readonly="readonly"></textarea>
+		</div>
 		<div id="sitelen"></div>
 	</div>
+	<script src="words.js"></script>
 	<script>
 var a = document.getElementById("a");
 var sitelen = document.getElementById("sitelen");
+var suggests_area = document.getElementById("suggests_area");
 var tokipona_text;
 var sitelen_image;
 var path = "C:\\Users\\kani\\Documents\\tokipona";
@@ -46,22 +51,33 @@ function getA() {
 	console.log(tokipona_text);
 }
 function aToSitelen() {
-	sitelen.innerHTML = "";
-	for (var i in tokipona_text) {
-		a_text = tokipona_text[i];
-		sitelen_image = ".\\sitelenPona\\" + a_text + ".png";
-		sitelen.innerHTML += "<img src='" + sitelen_image + "'>";
+	suggests = getSuggest(tokipona_text[tokipona_text.length-1]);
+	if (suggests.includes(tokipona_text[tokipona_text.length-1])) {
+		var img = "";
+		for (var i in tokipona_text) {
+			a_text = tokipona_text[i];
+			sitelen_image = ".\\sitelenPona\\" + a_text + ".png";
+			img += "<img src='" + sitelen_image + "'>";
+		}
+		sitelen.innerHTML = img;
 	}
+}
+
+function setSuggests() {
+	suggests = getSuggest(tokipona_text[tokipona_text.length-1]);
+	suggests_area.innerHTML = suggests.join("\n");
 }
 
 (function() {
 	sitelen.style.width = a.getBoundingClientRect().width + "px";
-	getA()
+	getA();
+	setSuggests();
 	aToSitelen();
 })();
 
 a.addEventListener("keyup", function() {
 	getA();
+	setSuggests();
 	aToSitelen();
 });
 	</script>
