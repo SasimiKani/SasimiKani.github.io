@@ -17,6 +17,8 @@
 		background-color: #fff;
 	}
 	input, div#sitelen {
+		width: 100%; /* 親要素の幅に合わせる */
+		box-sizing: border-box; /* ボーダーとパディングを含める */
 		border: 3px solid gray;
 	}
 	div#sitelen {
@@ -32,7 +34,7 @@
 <body>
 	<div id="main">
 		<h1>sitelen pona</h1>
-		<input id="a" type="text" size="100">
+		<input id="a" type="text">
 		<div id="suggests">
 			<textarea id="suggests_area" rows="5" readonly="readonly"></textarea>
 		</div>
@@ -52,16 +54,13 @@ function getA() {
 	console.log(tokipona_text);
 }
 function aToSitelen() {
-	suggests = getSuggest(tokipona_text[tokipona_text.length-1]);
-	if (suggests.includes(tokipona_text[tokipona_text.length-1])) {
-		var img = "";
-		for (var i in tokipona_text) {
-			a_text = tokipona_text[i];
-			sitelen_image = ".\\sitelenPona\\" + a_text + ".png";
-			img += "<img src='" + sitelen_image + "'>";
-		}
-		sitelen.innerHTML = img;
+	var img = "";
+	for (var i in tokipona_text) {
+		a_text = tokipona_text[i];
+    var sitelen_image = "./sitelenPona/" + a_text + ".png";
+    img += "<img src='" + sitelen_image + "' onerror='this.src=\"./sitelenPona/default.png\"'>";
 	}
+	sitelen.innerHTML = img;
 }
 
 function setSuggests() {
