@@ -2,68 +2,55 @@
 <html lang="ja">
 <head>
 	<meta charset="utf-8">
-	<title>Sitelen Pona</title>
-	<style>
-	body {
-		display: flex;
-		justify-content: center;
-		background-color: #ccc;
-	}
-	div#main {
-		width: 80%;
-		height:80%;
-		padding: 10px;
-		border: 1px solid gray;
-		background-color: #fff;
-	}
-	input, div#sitelen {
-		border: 3px solid gray;
-	}
-	div#sitelen {
-		padding:5px;
-		margin-top: 20px;
-	}
-	img {
-		width: 52px;
-	}
-	</style>
+	<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+	<link rel="stylesheet" href="style.css">
+	<title>ﾊﾟﾝﾁ</title>
 </head>
 <body>
-	<div id="main">
-		<h1>sitelen pona</h1>
-		<input id="a" type="text" size="100">
-		<div id="sitelen"></div>
-	</div>
+	<h1>( '-'  )ｼﾞｪﾈﾚｰﾀｰﾁｬﾝ</h1>
+	<input id="char" placeholder="持たせる文字"><br>
+	<input id="yomi" placeholder="〇〇ﾁｬﾝの部分"><br>
+	<input type="button" id="gen" value="作成"><br>
+	<input id="punch" placeholder="出力"><br>
+	<input type="button" id="tweet" value="ツイート">
+	<input type="button" id="tweet_link" value="ツイート（リンク付き）">
+	<input type="button" id="copy" value="コピー"><span style="margin-left:10px;" id="msg"></span><br>
 	<script>
-var a = document.getElementById("a");
-var sitelen = document.getElementById("sitelen");
-var tokipona_text;
-var sitelen_image;
-var path = "C:\\Users\\kani\\Documents\\tokipona";
-
-function getA() {
-	tokipona_text = a.value.split(" ");
-	console.log(tokipona_text);
-}
-function aToSitelen() {
-	sitelen.innerHTML = "";
-	for (var i in tokipona_text) {
-		a_text = tokipona_text[i];
-		sitelen_image = ".\\sitelenPona\\" + a_text + ".png";
-		sitelen.innerHTML += "<img src='" + sitelen_image + "'>";
+	function punch() {
+		var c = document.getElementById("char").value;
+		var yomi = document.getElementById("yomi").value;
+		document.getElementById("punch").value = c + "( '-' " + c + " )" + yomi +"ﾁｬﾝ";
 	}
-}
-
-(function() {
-	sitelen.style.width = a.getBoundingClientRect().width + "px";
-	getA()
-	aToSitelen();
-})();
-
-a.addEventListener("keyup", function() {
-	getA();
-	aToSitelen();
-});
+	document.getElementById("char").addEventListener("keypress", function(e) {
+		console.log(e.key);
+		if (e.key == "Enter") punch();
+	});
+	document.getElementById("yomi").addEventListener("keypress", function(e) {
+		console.log(e.key);
+		if (e.key == "Enter") punch();
+	});
+	document.getElementById("gen").addEventListener("click", function() {
+		punch();
+	});
+	document.getElementById("tweet").addEventListener("click", function() {
+		var tweet = document.getElementById("punch").value;
+		window.open("https://twitter.com/intent/tweet?text=" + tweet);
+	});
+	document.getElementById("tweet_link").addEventListener("click", function() {
+		var tweet = document.getElementById("punch").value;
+		window.open("https://twitter.com/intent/tweet?text=" + tweet + "%0Ahttps://sasimikani.github.io/punch/%0A%23ｼﾞｪﾈﾚｰﾀｰﾁｬﾝ");
+	});
+	document.getElementById("copy").addEventListener("click", function() {
+		var target = document.getElementById("punch");
+		target.select();
+		document.execCommand("Copy");
+		
+		document.getElementById("msg").innerText = "コピーしました";
+		setTimeout(function() {
+			document.getElementById("msg").innerText = "";
+		}, 1500);
+		
+	});
 	</script>
 </body>
 </html>
