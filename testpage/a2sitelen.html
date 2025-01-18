@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<title>Sitelen Pona</title>
+	<style>
+	body {
+		display: flex;
+		justify-content: center;
+		background-color: #ccc;
+	}
+	div#main {
+		width: 80%;
+		height:80%;
+		padding: 10px;
+		border: 1px solid gray;
+		background-color: #fff;
+	}
+	input, div#sitelen {
+		border: 3px solid gray;
+	}
+	div#sitelen {
+		padding:5px;
+		margin-top: 20px;
+	}
+	img {
+		width: 52px;
+	}
+	</style>
+</head>
+<body>
+	<div id="main">
+		<h1>sitelen pona</h1>
+		<input id="a" type="text" size="100">
+		<div id="sitelen"></div>
+	</div>
+	<script>
+var a = document.getElementById("a");
+var sitelen = document.getElementById("sitelen");
+var tokipona_text;
+var sitelen_image;
+var path = "C:\\Users\\kani\\Documents\\tokipona";
+
+function getA() {
+	tokipona_text = a.value.split(" ");
+	console.log(tokipona_text);
+}
+function aToSitelen() {
+	sitelen.innerHTML = "";
+	for (var i in tokipona_text) {
+		a_text = tokipona_text[i];
+		sitelen_image = ".\\sitelenPona\\" + a_text + ".png";
+		sitelen.innerHTML += "<img src='" + sitelen_image + "'>";
+	}
+}
+
+(function() {
+	sitelen.style.width = a.getBoundingClientRect().width + "px";
+	getA()
+	aToSitelen();
+})();
+
+a.addEventListener("keyup", function() {
+	getA();
+	aToSitelen();
+});
+	</script>
+</body>
+</html>
