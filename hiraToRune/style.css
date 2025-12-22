@@ -1,0 +1,35 @@
+* {
+    color: #f0f0f0;
+}
+body {
+    font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    background-color: #223344;
+}
+h1 {
+    padding: 0.3rem 0 0 1.2rem;
+    background-color: #334455;
+    border-bottom: #445566 solid 4px;
+    border-radius: 1rem 1rem 0 0;
+    color: #ccddee;
+    text-shadow: #001122 0px 0px 20px;
+}
+h2 {
+    font-size: larger;
+}
+textarea {
+    width: calc(100vw - 24px);
+    background-color: #445566;
+}
+textarea#hira {
+    font-size: large;
+}
+textarea#rune {
+    font-family: 'Segoe UI Historic', 'Norse', 'Junicode', 'Cardo', serif;
+}
+
+/* モバイル */
+@media (max-width: 600px) {
+    textarea {
+        font-size: larger;
+    }
+}
