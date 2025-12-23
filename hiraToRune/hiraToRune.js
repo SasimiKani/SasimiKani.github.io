@@ -5,7 +5,7 @@ let roma = ["a", "i", "u", "e", "o", "kya", "kyu", "kyo", "ka", "ki", "ku", "ke"
 let rune = {
 	"a": "ᚨ",
 	"b": "ᛒ",
-	"ch": "ᛏ",
+	"ch": "ᛏᚺ",
 	"d": "ᛞ",
 	"e": "ᛖ",
 	"f": "ᚠ",
@@ -39,8 +39,25 @@ function hiraToRune(str) {
 	return str
 }
 
+function runeToHira(str) {
+	Object.keys(rune).forEach(a => {
+		str = str.replaceAll(rune[a], a)
+	})
+	str = str.replace(/(.)\1/g, "っ$1");
+	roma
+	.map((c, i) => [c, hira[i]])
+	.sort((a, b) => b[0].length - a[0].length).forEach((c, i) => {
+		if (c[0] === "") return;
+		str = str.replaceAll(c[0], c[1])
+	})
+	return str;
+}
+
 document.getElementById("hira").addEventListener("input", (e) => {
 	document.getElementById("rune").value = hiraToRune(e.target.value);
+})
+document.getElementById("rune").addEventListener("input", (e) => {
+	document.getElementById("hira").value = runeToHira(e.target.value);
 })
 
 /*
