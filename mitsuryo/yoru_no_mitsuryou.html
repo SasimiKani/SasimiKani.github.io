@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>夜の漁場 - 密漁者</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink-navy:#0b1622;
+    --deep-sea:#0e2438;
+    --moon-silver:#dfe8ec;
+    --lantern:#e8a23a;
+    --lantern-dim:#8a621f;
+    --danger:#d1453b;
+    --danger-glow:#ff6b57;
+    --safe-green:#4f8f5b;
+    --sand:#cbb27c;
+    --panel:#0a141fcc;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:
+      radial-gradient(ellipse at 50% -10%, #16324a 0%, var(--ink-navy) 55%, #060c13 100%);
+    color:var(--moon-silver);
+    font-family:'Shippori Mincho', serif;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  #wrap{
+    position:relative;
+    width:900px; height:600px;
+    box-shadow:0 0 0 2px #1c3247, 0 0 40px 6px rgba(0,0,0,0.6), 0 0 80px 10px rgba(20,60,90,0.25);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  canvas{display:block; background:#08131f;}
+
+  #hud{
+    position:absolute; top:0; left:0; width:100%;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:10px 14px;
+    pointer-events:none;
+    font-family:'DotGothic16', monospace;
+  }
+  .hud-box{
+    background:var(--panel);
+    border:1px solid #2c4a5c;
+    padding:8px 16px;
+    border-radius:3px;
+    letter-spacing:1px;
+    font-size:19px;
+    min-width:130px;
+  }
+  #timer{color:var(--moon-silver); text-align:center;}
+  #timer.low{color:var(--danger); animation:blink 0.5s infinite;}
+  #money{color:var(--lantern); text-align:right;}
+  #moneyVal{font-size:24px; display:block; margin-top:2px;}
+
+  #detectWrap{
+    position:absolute; top:64px; left:14px; width:260px;
+    font-family:'DotGothic16', monospace; font-size:14px;
+    pointer-events:none;
+  }
+  #detectLabel{color:#8fb0c2; letter-spacing:2px;}
+  #detectTrack{
+    width:100%; height:14px; margin-top:4px;
+    background:#0a1620; border:1px solid #2c4a5c; border-radius:2px; overflow:hidden;
+  }
+  #detectFill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--safe-green), var(--lantern) 60%, var(--danger));
+    transition:width 0.08s linear;
+  }
+
+  #zoneTag{
+    position:absolute; top:64px; right:14px;
+    font-family:'DotGothic16', monospace; font-size:15px;
+    color:#8fb0c2; letter-spacing:3px;
+    background:var(--panel); border:1px solid #2c4a5c; padding:5px 12px; border-radius:3px;
+  }
+
+  #vignette{
+    position:absolute; inset:0; pointer-events:none;
+    box-shadow: inset 0 0 0 0 rgba(209,69,59,0);
+    transition: box-shadow 0.15s linear;
+  }
+
+  @keyframes blink{50%{opacity:0.3;}}
+
+  .overlay{
+    position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(6,12,19,0.94), rgba(6,12,19,0.98));
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:30px;
+  }
+  .hidden{display:none !important;}
+  .title-jp{
+    font-family:'Shippori Mincho', serif; font-weight:700;
+    font-size:44px; color:var(--moon-silver); letter-spacing:6px;
+    margin:0 0 6px 0;
+    text-shadow:0 0 18px rgba(232,162,58,0.25);
+  }
+  .subtitle{
+    font-family:'DotGothic16', monospace;
+    color:var(--lantern); font-size:15px; letter-spacing:4px; margin-bottom:22px;
+  }
+  .lore{
+    max-width:600px; font-size:16px; line-height:2; color:#a9bfcc;
+    border-top:1px solid #2c4a5c; border-bottom:1px solid #2c4a5c;
+    padding:16px 4px; margin-bottom:22px;
+  }
+  .lore b{color:var(--lantern);}
+  .controls{
+    display:flex; gap:26px; margin-bottom:26px;
+    font-family:'DotGothic16', monospace; font-size:14px; color:#8fb0c2;
+  }
+  .controls div span{
+    display:inline-block; background:#16283a; border:1px solid #345066;
+    padding:3px 9px; border-radius:3px; color:var(--moon-silver); margin-right:6px;
+  }
+  button{
+    font-family:'DotGothic16', monospace;
+    background:var(--lantern); color:#241704; border:none;
+    padding:14px 38px; font-size:18px; letter-spacing:4px;
+    border-radius:2px; cursor:pointer;
+    box-shadow:0 0 0 1px #6b4a12, 0 4px 0 0 #8a621f;
+    transition:transform 0.08s;
+  }
+  button:active{transform:translateY(3px); box-shadow:0 0 0 1px #6b4a12, 0 1px 0 0 #8a621f;}
+  .disclaimer{
+    margin-top:18px; font-size:12px; color:#5a7284; letter-spacing:1px; max-width:540px;
+  }
+
+  #endTitle{font-size:36px; letter-spacing:5px; margin-bottom:14px;}
+  #endTitle.caught{color:var(--danger); text-shadow:0 0 20px rgba(209,69,59,0.5);}
+  #endTitle.clear{color:var(--lantern); text-shadow:0 0 20px rgba(232,162,58,0.4);}
+  #endBody{font-family:'DotGothic16', monospace; font-size:16px; line-height:2.1; color:#c3d4de; margin-bottom:10px;}
+  #endMoneyLine{font-size:29px; margin:10px 0 4px 0;}
+  #endMoneyLine .struck{text-decoration:line-through; color:#5a7284; font-size:20px; margin-right:10px;}
+  #bestLine{font-size:14px; color:#8fb0c2; margin-bottom:22px; font-family:'DotGothic16', monospace;}
+
+  .float-hint{
+    position:absolute; font-family:'DotGothic16', monospace; font-size:13px;
+    color:#e8a23a; pointer-events:none; text-shadow:0 0 4px #000;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="900" height="600"></canvas>
+
+  <div id="hud">
+    <div id="timer" class="hud-box">03:00</div>
+    <div id="money" class="hud-box">水揚げ高<span id="moneyVal">¥0</span></div>
+  </div>
+  <div id="detectWrap">
+    <div id="detectLabel">警　戒　度</div>
+    <div id="detectTrack"><div id="detectFill"></div></div>
+  </div>
+  <div id="zoneTag">浜辺</div>
+  <div id="vignette"></div>
+
+  <div id="startScreen" class="overlay">
+    <div class="subtitle">漁業権侵害シミュレーター</div>
+    <h1 class="title-jp">夜の漁場</h1>
+    <div class="lore">
+      日本の沿岸では、漁業協同組合が持つ<b>共同漁業権</b>により、
+      アワビ・サザエ・ウニなどの採取は許可を得た組合員以外に禁じられている。<br>
+      無許可でこれらを持ち出す行為は<b>密漁</b>として漁業法違反にあたり、
+      監視員に見つかれば厳しい罰則が待っている。<br>
+      ここは深夜の漁場。奥へ進むほど獲物は高く売れるが、監視員の数も視界も増えていく。
+      岩陰は移動を阻むが視線も遮る——うまく使えば、見つからずに済む。<br>
+      制限時間内にどれだけ稼げるか——見つかれば、すべてが水の泡だ。
+      <br><span style="color:#5a7284;">※本作はフィクションであり、実際の密漁行為を助長するものではありません。</span>
+    </div>
+    <div class="controls">
+      <div><span>↑↓←→ / WASD</span>移動</div>
+      <div><span>Shift</span>走る（速いが目立つ）</div>
+      <div><span>Ctrl</span>しゃがむ（遅いが隠れやすい）</div>
+      <div><span>Space</span>その場で採取</div>
+    </div>
+    <button id="startBtn">漁場へ忍び込む</button>
+    <div class="disclaimer">見つかると追跡してくる。振り切って視界を外せば、しばらく捜索した後パトロールに戻る。足音を立てると周囲を見渡され始める。</div>
+  </div>
+
+  <div id="endScreen" class="overlay hidden">
+    <h1 id="endTitle" class="title-jp">-</h1>
+    <div id="endBody"></div>
+    <div id="endMoneyLine"></div>
+    <div id="bestLine"></div>
+    <button id="restartBtn">もう一度忍び込む</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const CW = canvas.width, CH = canvas.height;
+
+  const ZONE_H = 800;
+  const WORLD_W = 900, WORLD_H = ZONE_H*3;
+  const ZONES = [
+    {name:'浜辺', top:0, bottom:ZONE_H, base:'#3a3220', base2:'#4a4128'},
+    {name:'磯', top:ZONE_H, bottom:ZONE_H*2, base:'#22303a', base2:'#2b3d48'},
+    {name:'沖の海', top:ZONE_H*2, bottom:ZONE_H*3, base:'#0c2438', base2:'#0a3552'}
+  ];
+  function zoneAt(y){ return y < ZONE_H ? 0 : (y < ZONE_H*2 ? 1 : 2); }
+
+  const ITEM_DEFS = {
+    kelp:   {name:'昆布',   value:300,  color:'#4f7a3b', dark:'#2f4a23', r:13, kind:'kelp'},
+    hotate: {name:'ホタテ', value:1000, color:'#e8d9c4', dark:'#b39c7c', r:15, kind:'shell'},
+    sazae:  {name:'サザエ', value:1500, color:'#a9612f', dark:'#6b3a19', r:17, kind:'spiral'},
+    uni:    {name:'ウニ',   value:2500, color:'#4a2a5c', dark:'#2a1533', r:17, kind:'spiky'},
+    namako: {name:'ナマコ', value:2000, color:'#7a3535', dark:'#4a1f1f', r:18, kind:'blob'},
+    awabi:  {name:'アワビ', value:6000, color:'#cdb37a', dark:'#8a7549', r:20, kind:'shell'}
+  };
+
+  const SPAWNS = [
+    {x:150,y:150,type:'kelp'}, {x:650,y:180,type:'kelp'}, {x:400,y:90,type:'hotate'},
+    {x:220,y:660,type:'kelp'}, {x:760,y:610,type:'hotate'}, {x:520,y:710,type:'kelp'},
+    {x:180,y:950,type:'sazae'}, {x:710,y:1000,type:'uni'}, {x:400,y:900,type:'sazae'},
+    {x:600,y:1300,type:'uni'}, {x:250,y:1460,type:'sazae'}, {x:750,y:1400,type:'uni'},
+    {x:210,y:1760,type:'namako'}, {x:660,y:1810,type:'awabi'}, {x:450,y:2010,type:'namako'},
+    {x:160,y:2220,type:'awabi'}, {x:700,y:2260,type:'namako'}, {x:410,y:2160,type:'awabi'}
+  ];
+
+  const HIDE_SPOTS = [
+    {x:100,y:300,r:42},{x:800,y:420,r:48},{x:300,y:600,r:38},{x:620,y:120,r:36},
+    {x:150,y:1050,r:52},{x:760,y:1150,r:52},{x:460,y:1360,r:58},{x:120,y:1500,r:40},
+    {x:250,y:1900,r:48},{x:660,y:2060,r:52},{x:400,y:2300,r:48},{x:80,y:2100,r:44}
+  ];
+
+  // solid obstacles (rocks) - block movement AND line of sight. Sparse & open on the
+  // cheap beach, denser and more maze-like the deeper (and more valuable) the zone gets.
+  const WALLS = [
+    {x:360,y:310,w:90,h:50}, {x:560,y:470,w:70,h:70}, {x:230,y:520,w:60,h:90},
+    {x:270,y:990,w:80,h:60}, {x:610,y:1070,w:70,h:90}, {x:290,y:1250,w:60,h:70},
+    {x:590,y:1400,w:90,h:60}, {x:480,y:1120,w:55,h:55},
+    {x:390,y:1740,w:100,h:60}, {x:440,y:1950,w:80,h:70}, {x:340,y:2200,w:90,h:60},
+    {x:600,y:2250,w:70,h:80}, {x:500,y:2050,w:60,h:90}, {x:230,y:2080,w:60,h:60}
+  ];
+  function circleRectHit(cx,cy,cr,rect){
+    const rx1=rect.x-rect.w/2, rx2=rect.x+rect.w/2, ry1=rect.y-rect.h/2, ry2=rect.y+rect.h/2;
+    const nx = Math.max(rx1, Math.min(cx, rx2));
+    const ny = Math.max(ry1, Math.min(cy, ry2));
+    return Math.hypot(cx-nx, cy-ny) < cr;
+  }
+  function pointInRect(px,py,rect){
+    return px > rect.x-rect.w/2 && px < rect.x+rect.w/2 && py > rect.y-rect.h/2 && py < rect.y+rect.h/2;
+  }
+  function sightBlocked(x1,y1,x2,y2){
+    const steps = 14;
+    for(let i=1;i<steps;i++){
+      const t = i/steps;
+      const px = x1+(x2-x1)*t, py = y1+(y2-y1)*t;
+      for(const w of WALLS){ if(pointInRect(px,py,w)) return true; }
+    }
+    return false;
+  }
+
+  function makeGuard(cfg){
+    return Object.assign({wpIndex:0, facing:0, alert:0, aiState:'patrol', stateTimer:0, sweepT:0, baseAngle:0, searchX:0, searchY:0}, cfg);
+  }
+  // 安いエリアほど監視は薄く、高いエリアほど監視は厳しく（人数・視界・速度が増す）
+  const GUARD_BASE = [
+    makeGuard({x:400,y:180, waypoints:[{x:120,y:180},{x:780,y:180},{x:780,y:680},{x:120,y:680}], speed:58, coneAngle:38, range:165, noise:85}),
+    makeGuard({x:150,y:900, waypoints:[{x:150,y:900},{x:750,y:900},{x:750,y:1500},{x:150,y:1500}], speed:75, coneAngle:48, range:205, noise:105}),
+    makeGuard({x:450,y:850, waypoints:[{x:450,y:850},{x:450,y:1550},{x:450,y:850}], speed:72, coneAngle:46, range:200, noise:105}),
+    makeGuard({x:200,y:1750, waypoints:[{x:200,y:1750},{x:200,y:2300},{x:200,y:1750}], speed:82, coneAngle:54, range:235, noise:125}),
+    makeGuard({x:700,y:1700, waypoints:[{x:700,y:1700},{x:700,y:2280},{x:700,y:1700}], speed:82, coneAngle:54, range:235, noise:125}),
+    makeGuard({x:100,y:1900, waypoints:[{x:100,y:1900},{x:800,y:1900},{x:800,y:2100},{x:100,y:2100}], speed:58, coneAngle:66, range:270, noise:135, boat:true})
+  ];
+
+  const KEY = {up:false,down:false,left:false,right:false,run:false,crouch:false,grab:false};
+  const KEYMAP = {
+    ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
+    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
+    ShiftLeft:'run', ShiftRight:'run', ControlLeft:'crouch', ControlRight:'crouch',
+    Space:'grab'
+  };
+  window.addEventListener('keydown', e=>{
+    if(KEYMAP[e.code]){ KEY[KEYMAP[e.code]] = true; e.preventDefault(); }
+  });
+  window.addEventListener('keyup', e=>{
+    if(KEYMAP[e.code]){ KEY[KEYMAP[e.code]] = false; e.preventDefault(); }
+  });
+
+  const TIME_LIMIT = 90;
+  const GRAB_TIME = 1.1;
+  const RESPAWN_TIME = 14;
+  const DETECT_RATE = 14;   // 警戒度は自動回復しないため、じわじわ蓄積する形に調整
+  const NOISE_RATE = 9;
+  const CLOSE_RANGE_FACTOR = 0.3; // 視界内でこの距離まで近づかれると即アウト
+
+  let state, player, items, guards, floats, scrollY, best;
+
+  function resetGame(){
+    state = 'playing';
+    player = {x:450, y:120, r:18, vx:0, vy:0, speed:0, mode:'walk', channel:0, channelTarget:-1};
+    items = SPAWNS.map((s,i)=>({id:i, x:s.x, y:s.y, type:s.type, collected:false, respawnAt:0}));
+    guards = GUARD_BASE.map(g=>({...g, x:g.waypoints[0].x, y:g.waypoints[0].y, wpIndex:0, facing:0, alert:0, aiState:'patrol', stateTimer:0, sweepT:0}));
+    floats = [];
+    scrollY = 0;
+    money = 0;
+    timeLeft = TIME_LIMIT;
+    detection = 0;
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('endScreen').classList.add('hidden');
+  }
+  let money=0, timeLeft=TIME_LIMIT, detection=0;
+  best = Number(localStorage.getItem('mitsuryou_best')||0);
+
+  function inHideSpot(x,y){
+    for(const h of HIDE_SPOTS){
+      if(Math.hypot(x-h.x, y-h.y) < h.r) return true;
+    }
+    return false;
+  }
+  function hideMultiplierAt(x,y,crouching){
+    let mult = inHideSpot(x,y) ? 0.18 : 1.0;
+    if(crouching) mult *= 0.5;
+    return mult;
+  }
+
+  function angleDiff(a,b){
+    let d = a-b;
+    while(d > Math.PI) d -= Math.PI*2;
+    while(d < -Math.PI) d += Math.PI*2;
+    return Math.abs(d);
+  }
+
+  function update(dt){
+    if(state !== 'playing') return;
+
+    let dx=0, dy=0;
+    if(KEY.up) dy -= 1;
+    if(KEY.down) dy += 1;
+    if(KEY.left) dx -= 1;
+    if(KEY.right) dx += 1;
+    const moving = (dx!==0 || dy!==0);
+    if(moving){ const len = Math.hypot(dx,dy); dx/=len; dy/=len; }
+
+    let mode = 'walk', spd = 170;
+    if(KEY.crouch){ mode='crouch'; spd = 88; }
+    else if(KEY.run){ mode='run'; spd = 300; }
+    player.mode = moving ? mode : 'idle';
+
+    function blockedAt(px,py){
+      if(px<18 || px>WORLD_W-18 || py<18 || py>WORLD_H-18) return true;
+      for(const w of WALLS){ if(circleRectHit(px,py,player.r*0.8,w)) return true; }
+      return false;
+    }
+    const tryX = player.x + dx*spd*dt;
+    const tryY = player.y + dy*spd*dt;
+    if(!blockedAt(tryX, player.y)) player.x = tryX;
+    if(!blockedAt(player.x, tryY)) player.y = tryY;
+
+    scrollY = Math.min(WORLD_H-CH, Math.max(0, player.y - CH/2));
+
+    // grabbing
+    if(!moving && KEY.grab){
+      let nearest = -1, nd = 34;
+      for(const it of items){
+        if(it.collected) continue;
+        const d = Math.hypot(player.x-it.x, player.y-it.y);
+        if(d < nd){ nd = d; nearest = it.id; }
+      }
+      if(nearest !== -1){
+        if(player.channelTarget !== nearest){ player.channelTarget = nearest; player.channel = 0; }
+        player.channel += dt;
+        if(player.channel >= GRAB_TIME){
+          const it = items[nearest];
+          it.collected = true;
+          it.respawnAt = timeLeft - RESPAWN_TIME;
+          const def = ITEM_DEFS[it.type];
+          money += def.value;
+          floats.push({x:it.x, y:it.y, text:'+¥'+def.value.toLocaleString(), life:1.2, vy:-30});
+          player.channel = 0; player.channelTarget = -1;
+        }
+      } else { player.channel = 0; player.channelTarget = -1; }
+    } else {
+      player.channel = 0; player.channelTarget = -1;
+    }
+
+    // items respawn
+    for(const it of items){
+      if(it.collected && timeLeft <= it.respawnAt){ it.collected = false; }
+    }
+
+    // guards: patrol -> chase (spotted) -> search (lost sight, sweeps last-known spot) -> patrol
+    //         patrol -> investigate (heard footsteps) -> patrol, or -> chase if it then spots you
+    const playerHidden = inHideSpot(player.x, player.y);
+    for(const g of guards){
+      const pdx0 = player.x-g.x, pdy0 = player.y-g.y;
+      const pdist0 = Math.hypot(pdx0,pdy0);
+      let seen = false;
+      if(pdist0 < g.range && !sightBlocked(g.x, g.y, player.x, player.y)){
+        const angToPlayer = Math.atan2(pdy0,pdx0);
+        if(angleDiff(angToPlayer, g.facing) < (g.coneAngle*Math.PI/180)) seen = true;
+      }
+      // 停止中(freeze)は音のした方を向いているだけで、まだ発見はしない。
+      // これがないと、音の方向へ向いた瞬間に視界チェックへ再突入してしまい、
+      // 「止まる」演出が実質1フレームで終わってしまう。
+      if(g.aiState === 'freeze') seen = false;
+      const noiseRadius = mode==='run' ? g.noise : (mode==='walk' ? g.noise*0.62 : 0);
+      const heard = !seen && pdist0 < noiseRadius;
+
+      if(seen){
+        g.aiState = 'chase'; g.searchX = player.x; g.searchY = player.y; g.stateTimer = 1.6;
+      } else if(g.aiState === 'chase'){
+        g.aiState = 'search'; g.stateTimer = 1.6; g.sweepT = 0;
+      } else if(g.aiState === 'search'){
+        g.stateTimer -= dt;
+        if(g.stateTimer <= 0) g.aiState = 'patrol';
+      }
+      if(heard && g.aiState === 'patrol'){
+        // 完全停止時は「プレイヤーの方向」ではなく、その瞬間に監視員が向いていた方向で固定する
+        g.aiState = 'freeze'; g.stateTimer = 1.0; g.baseAngle = g.facing;
+      } else if(heard && g.aiState === 'investigate'){
+        g.stateTimer = 1.8; g.baseAngle = Math.atan2(pdy0,pdx0);
+      } else if(g.aiState === 'freeze'){
+        // 音が聞こえ続けていてもタイマーは延長しない（張り付いて動かなくなるのを防ぐ）
+        g.stateTimer -= dt;
+        if(g.stateTimer <= 0){ g.aiState = 'investigate'; g.stateTimer = 1.8; g.sweepT = 0; }
+      } else if(g.aiState === 'investigate'){
+        g.stateTimer -= dt;
+        if(g.stateTimer <= 0) g.aiState = 'patrol';
+      }
+
+      if(g.aiState === 'chase'){
+        const d = pdist0 || 1;
+        const spd = g.speed * 1.15;
+        g.x += (pdx0/d)*spd*dt; g.y += (pdy0/d)*spd*dt;
+        g.facing = Math.atan2(pdy0,pdx0);
+      } else if(g.aiState === 'search'){
+        const tdx = g.searchX-g.x, tdy = g.searchY-g.y;
+        const td = Math.hypot(tdx,tdy);
+        if(td > 6){
+          g.x += (tdx/td)*g.speed*dt; g.y += (tdy/td)*g.speed*dt;
+          g.facing = Math.atan2(tdy,tdx);
+        } else {
+          g.sweepT += dt;
+          g.facing = Math.atan2(tdy,tdx) + Math.sin(g.sweepT*3)*0.9;
+        }
+      } else if(g.aiState === 'freeze'){
+        g.facing = g.baseAngle; // 足を止めて音のした方をじっと見る
+      } else if(g.aiState === 'investigate'){
+        g.sweepT += dt;
+        g.facing = g.baseAngle + Math.sin(g.sweepT*2.4)*0.8;
+      } else {
+        const wp = g.waypoints[g.wpIndex];
+        const gdx = wp.x-g.x, gdy = wp.y-g.y;
+        const gd = Math.hypot(gdx,gdy);
+        if(gd < 4){ g.wpIndex = (g.wpIndex+1) % g.waypoints.length; }
+        else {
+          const mvx=gdx/gd, mvy=gdy/gd;
+          g.x += mvx*g.speed*dt; g.y += mvy*g.speed*dt;
+          g.facing = Math.atan2(mvy,mvx);
+        }
+      }
+      g.alert = g.aiState==='chase' ? 1 : (g.aiState==='investigate'||g.aiState==='search'||g.aiState==='freeze' ? 0.5 : Math.max(0,g.alert-dt*2));
+
+      if(!seen) continue;
+
+      // 視界に入った状態でここまで近づかれると、隠れていない限り即摘発
+      const closeRange = g.range * CLOSE_RANGE_FACTOR;
+      if(!playerHidden && pdist0 < closeRange){
+        endGame('caught'); return;
+      }
+
+      const hideMult = hideMultiplierAt(player.x, player.y, mode==='crouch');
+      detection += DETECT_RATE * hideMult * dt;
+    }
+    // 警戒度は一度上がったら自動では下がらない（蓄積制）
+    detection = Math.min(100, detection);
+
+    if(detection >= 100){ endGame('caught'); return; }
+
+    for(const f of floats){ f.life -= dt; f.y += f.vy*dt; }
+    floats = floats.filter(f=>f.life>0);
+
+    timeLeft -= dt;
+    if(timeLeft <= 0){ timeLeft = 0; endGame('clear'); return; }
+  }
+
+  function endGame(result){
+    state = result;
+    const endScreen = document.getElementById('endScreen');
+    const title = document.getElementById('endTitle');
+    const body = document.getElementById('endBody');
+    const moneyLine = document.getElementById('endMoneyLine');
+    const bestLine = document.getElementById('bestLine');
+    endScreen.classList.remove('hidden');
+    if(result === 'caught'){
+      title.textContent = '御用だ！密漁摘発';
+      title.className = 'title-jp caught';
+      body.textContent = '監視員に発見された。積み荷はすべて没収され、水揚げ高はゼロになった。';
+      moneyLine.innerHTML = '<span class="struck">¥'+money.toLocaleString()+'</span> <span style="color:#d1453b;">→ ¥0</span>';
+      money = 0;
+    } else {
+      title.textContent = '無事、引き上げ完了';
+      title.className = 'title-jp clear';
+      body.textContent = '誰にも気づかれることなく、漁場を後にした。';
+      moneyLine.textContent = '最終水揚げ高　¥'+money.toLocaleString();
+      if(money > best){ best = money; localStorage.setItem('mitsuryou_best', String(best)); }
+    }
+    bestLine.textContent = '自己ベスト　¥'+best.toLocaleString();
+  }
+
+  // ---- rendering ----
+  function drawItem(it){
+    const def = ITEM_DEFS[it.type];
+    const sx = it.x, sy = it.y - scrollY;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = def.dark;
+    ctx.beginPath(); ctx.ellipse(0, def.r*0.6, def.r*1.1, def.r*0.4, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = def.color;
+    if(def.kind==='spiky'){
+      ctx.beginPath();
+      for(let i=0;i<10;i++){
+        const a = i/10*Math.PI*2;
+        const rr = i%2===0 ? def.r : def.r*0.5;
+        ctx.lineTo(Math.cos(a)*rr, Math.sin(a)*rr);
+      }
+      ctx.closePath(); ctx.fill();
+    } else if(def.kind==='spiral'){
+      ctx.beginPath(); ctx.arc(0,0,def.r,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle = def.dark; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      for(let a=0; a<Math.PI*3; a+=0.3){
+        const rr = def.r*0.85*(1-a/(Math.PI*3.2));
+        ctx.lineTo(Math.cos(a)*rr, Math.sin(a)*rr);
+      }
+      ctx.stroke();
+    } else if(def.kind==='blob'){
+      ctx.beginPath(); ctx.ellipse(0,0,def.r*1.3,def.r*0.75,0,0,Math.PI*2); ctx.fill();
+    } else if(def.kind==='kelp'){
+      ctx.strokeStyle = def.color; ctx.lineWidth=4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(-def.r,6); ctx.quadraticCurveTo(0,-def.r,def.r,6); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.arc(0,0,def.r,Math.PI,0); ctx.fill();
+      ctx.strokeStyle = def.dark; ctx.lineWidth=1;
+      for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*def.r*0.35,-def.r*0.15); ctx.lineTo(i*def.r*0.35,-def.r*0.9); ctx.stroke(); }
+    }
+    ctx.restore();
+
+    if(player.channelTarget === it.id){
+      const prog = player.channel/GRAB_TIME;
+      ctx.save();
+      ctx.translate(sx, sy - def.r - 18);
+      ctx.strokeStyle = '#2c4a5c'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = '#e8a23a'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.arc(0,0,11,-Math.PI/2,-Math.PI/2+prog*Math.PI*2); ctx.stroke();
+      ctx.restore();
+    } else {
+      const d = Math.hypot(player.x-it.x, player.y-it.y);
+      if(d < 60){
+        ctx.font = "14px 'DotGothic16'";
+        ctx.fillStyle = 'rgba(223,232,236,0.9)';
+        ctx.textAlign='center';
+        ctx.fillText(def.name+' ¥'+def.value, sx, sy-def.r-8);
+      }
+    }
+  }
+
+  function drawGuard(g){
+    const sx = g.x, sy = g.y - scrollY;
+    if(sy < -60 || sy > CH+60) return;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(g.facing);
+    const coneRad = g.coneAngle*Math.PI/180;
+    const grad = ctx.createRadialGradient(0,0,0,0,0,g.range);
+    const glow = g.alert;
+    grad.addColorStop(0, `rgba(${232+ (glow*20)},${162-glow*100},${58-glow*40},${0.22+glow*0.18})`);
+    grad.addColorStop(1, 'rgba(232,162,58,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,g.range,-coneRad,coneRad);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = g.boat ? '#3a2a1a' : '#22303a';
+    if(g.boat){
+      ctx.beginPath();
+      ctx.ellipse(0,6,30,14,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle='#12212c';
+      ctx.fillRect(-8,-14,16,19);
+    } else {
+      ctx.beginPath(); ctx.arc(0,-19,10,0,Math.PI*2); ctx.fill();
+      ctx.fillRect(-8,-11,16,25);
+      ctx.strokeStyle='#8fb0c2'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(-8,-4); ctx.lineTo(-19,8); ctx.moveTo(8,-4); ctx.lineTo(19,8); ctx.stroke();
+    }
+    if(g.aiState === 'chase'){
+      ctx.fillStyle = '#d1453b';
+      ctx.font = "bold 22px 'DotGothic16'";
+      ctx.textAlign='center';
+      ctx.fillText('!', 0, -36);
+    } else if(g.aiState === 'investigate' || g.aiState === 'search' || g.aiState === 'freeze'){
+      ctx.fillStyle = '#e8a23a';
+      ctx.font = "bold 20px 'DotGothic16'";
+      ctx.textAlign='center';
+      ctx.fillText('?', 0, -36);
+    }
+    ctx.restore();
+  }
+
+  function drawPlayer(){
+    const sx = player.x, sy = player.y - scrollY;
+    ctx.save();
+    ctx.translate(sx, sy);
+    const crouch = player.mode==='crouch';
+    ctx.globalAlpha = crouch ? 0.75 : 1;
+    ctx.fillStyle = '#12212c';
+    ctx.beginPath();
+    ctx.ellipse(0, crouch?6:8, crouch?12:11, crouch?8:15, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#e0c9a0';
+    ctx.beginPath();
+    ctx.arc(0, crouch?-6:-11, 8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawZoneBg(){
+    for(const z of ZONES){
+      const top = z.top - scrollY, bot = z.bottom - scrollY;
+      if(bot < 0 || top > CH) continue;
+      const g = ctx.createLinearGradient(0, Math.max(top,0), 0, Math.min(bot,CH));
+      g.addColorStop(0, z.base); g.addColorStop(1, z.base2);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, top, CW, bot-top);
+    }
+    // subtle texture lines per zone
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    for(let y = -((scrollY)%40); y < CH; y += 40){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CW,y); ctx.stroke();
+    }
+    // zone boundary lines
+    ctx.strokeStyle = 'rgba(223,232,236,0.15)';
+    ctx.setLineDash([6,6]);
+    for(const b of [ZONE_H, ZONE_H*2]){
+      const sy = b - scrollY;
+      if(sy>-2 && sy<CH+2){ ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(CW,sy); ctx.stroke(); }
+    }
+    ctx.setLineDash([]);
+  }
+
+  function drawHideSpots(){
+    for(const h of HIDE_SPOTS){
+      const sy = h.y - scrollY;
+      if(sy < -h.r || sy > CH+h.r) continue;
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#1c2b1f';
+      ctx.beginPath();
+      ctx.ellipse(h.x, sy, h.r, h.r*0.62, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(79,143,91,0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawWalls(){
+    for(const w of WALLS){
+      const sy = w.y - scrollY;
+      if(sy < -w.h || sy > CH+w.h) continue;
+      ctx.save();
+      ctx.translate(w.x, sy);
+      ctx.fillStyle = '#161f26';
+      ctx.beginPath();
+      ctx.moveTo(-w.w/2, -w.h/2+4);
+      ctx.lineTo(-w.w/2+6, -w.h/2-3);
+      ctx.lineTo(w.w/2-8, -w.h/2);
+      ctx.lineTo(w.w/2, -w.h/2+8);
+      ctx.lineTo(w.w/2-2, w.h/2);
+      ctx.lineTo(-w.w/2+4, w.h/2-2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(143,176,194,0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function render(){
+    ctx.clearRect(0,0,CW,CH);
+    drawZoneBg();
+    drawHideSpots();
+    drawWalls();
+    for(const it of items){ if(!it.collected){
+      const sy = it.y - scrollY;
+      if(sy > -40 && sy < CH+40) drawItem(it);
+    }}
+    for(const g of guards) drawGuard(g);
+    drawPlayer();
+    ctx.textAlign='center';
+    for(const f of floats){
+      ctx.globalAlpha = Math.max(0,f.life/1.2);
+      ctx.fillStyle = '#e8a23a';
+      ctx.font = "17px 'DotGothic16'";
+      ctx.fillText(f.text, f.x, f.y - scrollY);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function updateHud(){
+    const m = Math.floor(timeLeft/60), s = Math.floor(timeLeft%60);
+    const timerEl = document.getElementById('timer');
+    timerEl.textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    timerEl.classList.toggle('low', timeLeft < 20 && state==='playing');
+    document.getElementById('moneyVal').textContent = '¥'+money.toLocaleString();
+    document.getElementById('detectFill').style.width = detection+'%';
+    document.getElementById('zoneTag').textContent = ZONES[zoneAt(player.y)].name;
+    const v = document.getElementById('vignette');
+    if(detection > 55){
+      const inten = (detection-55)/45;
+      v.style.boxShadow = `inset 0 0 ${80+inten*80}px ${10+inten*30}px rgba(209,69,59,${0.15+inten*0.35})`;
+    } else {
+      v.style.boxShadow = 'inset 0 0 0 0 rgba(209,69,59,0)';
+    }
+  }
+
+  let lastT = null;
+  function loop(t){
+    if(lastT===null) lastT = t;
+    const dt = Math.min(0.05, (t-lastT)/1000);
+    lastT = t;
+    update(dt);
+    render();
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  document.getElementById('startBtn').addEventListener('click', ()=>{ resetGame(); });
+  document.getElementById('restartBtn').addEventListener('click', ()=>{ resetGame(); });
+
+  state = 'start';
+  player = {x:450, y:120, r:18, vx:0, vy:0, mode:'idle', channel:0, channelTarget:-1};
+  items = SPAWNS.map((s,i)=>({id:i, x:s.x, y:s.y, type:s.type, collected:false, respawnAt:0}));
+  guards = GUARD_BASE.map(g=>({...g}));
+  floats = [];
+  scrollY = 0;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
