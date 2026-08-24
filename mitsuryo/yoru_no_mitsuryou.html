@@ -60,7 +60,7 @@
   #moneyVal{font-size:24px; display:block; margin-top:2px;}
 
   #detectWrap{
-    position:absolute; top:64px; left:14px; width:260px;
+    position:absolute; top:96px; left:14px; width:260px;
     font-family:'DotGothic16', monospace; font-size:14px;
     pointer-events:none;
   }
@@ -76,11 +76,25 @@
   }
 
   #zoneTag{
-    position:absolute; top:64px; right:14px;
+    position:absolute; top:96px; right:14px;
     font-family:'DotGothic16', monospace; font-size:15px;
     color:#8fb0c2; letter-spacing:3px;
     background:var(--panel); border:1px solid #2c4a5c; padding:5px 12px; border-radius:3px;
   }
+
+  #lockPanel{
+    position:absolute; top:134px; right:14px; width:200px;
+    font-family:'DotGothic16', monospace; font-size:13px;
+    background:var(--panel); border:1px solid #2c4a5c; border-radius:3px;
+    padding:8px 12px; pointer-events:none;
+  }
+  .lock-line{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:3px 0; letter-spacing:1px;
+  }
+  .lock-line + .lock-line{ border-top:1px solid #1c3247; margin-top:2px; padding-top:6px; }
+  .lock-line .lk-status{ color:#d1453b; }
+  .lock-line.unlocked .lk-status{ color:var(--safe-green); }
 
   #vignette{
     position:absolute; inset:0; pointer-events:none;
@@ -161,6 +175,10 @@
     <div id="detectTrack"><div id="detectFill"></div></div>
   </div>
   <div id="zoneTag">浜辺</div>
+  <div id="lockPanel">
+    <div id="lockIso" class="lock-line">磯 <span class="lk-status" id="lockIsoStatus">--</span></div>
+    <div id="lockSea" class="lock-line">沖の海 <span class="lk-status" id="lockSeaStatus">--</span></div>
+  </div>
   <div id="vignette"></div>
 
   <div id="startScreen" class="overlay">
@@ -171,7 +189,8 @@
       アワビ・サザエ・ウニなどの採取は許可を得た組合員以外に禁じられている。<br>
       無許可でこれらを持ち出す行為は<b>密漁</b>として漁業法違反にあたり、
       監視員に見つかれば厳しい罰則が待っている。<br>
-      ここは深夜の漁場。奥へ進むほど獲物は高く売れるが、監視員の数も視界も増えていく。
+      ここは深夜の漁場。最初は浜辺しか入れないが、時間が経つにつれて、
+      奥の高価なエリアが解放されていく。奥へ進むほど獲物は高く売れるが、監視員の数も視界も増えていく。<br>
       岩陰は移動を阻むが視線も遮る——うまく使えば、見つからずに済む。<br>
       制限時間内にどれだけ稼げるか——見つかれば、すべてが水の泡だ。
       <br><span style="color:#5a7284;">※本作はフィクションであり、実際の密漁行為を助長するものではありません。</span>
@@ -264,16 +283,16 @@
   }
 
   function makeGuard(cfg){
-    return Object.assign({wpIndex:0, facing:0, alert:0, aiState:'patrol', stateTimer:0, sweepT:0, baseAngle:0, searchX:0, searchY:0}, cfg);
+    return Object.assign({wpIndex:0, facing:0, alert:0, aiState:'patrol', stateTimer:0, sweepT:0, baseAngle:0, noiseAngle:0, searchX:0, searchY:0}, cfg);
   }
   // 安いエリアほど監視は薄く、高いエリアほど監視は厳しく（人数・視界・速度が増す）
   const GUARD_BASE = [
-    makeGuard({x:400,y:180, waypoints:[{x:120,y:180},{x:780,y:180},{x:780,y:680},{x:120,y:680}], speed:58, coneAngle:38, range:165, noise:85}),
-    makeGuard({x:150,y:900, waypoints:[{x:150,y:900},{x:750,y:900},{x:750,y:1500},{x:150,y:1500}], speed:75, coneAngle:48, range:205, noise:105}),
-    makeGuard({x:450,y:850, waypoints:[{x:450,y:850},{x:450,y:1550},{x:450,y:850}], speed:72, coneAngle:46, range:200, noise:105}),
-    makeGuard({x:200,y:1750, waypoints:[{x:200,y:1750},{x:200,y:2300},{x:200,y:1750}], speed:82, coneAngle:54, range:235, noise:125}),
-    makeGuard({x:700,y:1700, waypoints:[{x:700,y:1700},{x:700,y:2280},{x:700,y:1700}], speed:82, coneAngle:54, range:235, noise:125}),
-    makeGuard({x:100,y:1900, waypoints:[{x:100,y:1900},{x:800,y:1900},{x:800,y:2100},{x:100,y:2100}], speed:58, coneAngle:66, range:270, noise:135, boat:true})
+    makeGuard({x:400,y:180, waypoints:[{x:120,y:180},{x:780,y:180},{x:780,y:680},{x:120,y:680}], speed:58, coneAngle:38, range:165, noise:105}),
+    makeGuard({x:150,y:900, waypoints:[{x:150,y:900},{x:750,y:900},{x:750,y:1500},{x:150,y:1500}], speed:75, coneAngle:48, range:205, noise:130}),
+    makeGuard({x:450,y:850, waypoints:[{x:450,y:850},{x:450,y:1550},{x:450,y:850}], speed:72, coneAngle:46, range:200, noise:130}),
+    makeGuard({x:200,y:1750, waypoints:[{x:200,y:1750},{x:200,y:2300},{x:200,y:1750}], speed:82, coneAngle:54, range:235, noise:155}),
+    makeGuard({x:700,y:1700, waypoints:[{x:700,y:1700},{x:700,y:2280},{x:700,y:1700}], speed:82, coneAngle:54, range:235, noise:155}),
+    makeGuard({x:100,y:1900, waypoints:[{x:100,y:1900},{x:800,y:1900},{x:800,y:2100},{x:100,y:2100}], speed:58, coneAngle:66, range:270, noise:165, boat:true})
   ];
 
   const KEY = {up:false,down:false,left:false,right:false,run:false,crouch:false,grab:false};
@@ -297,7 +316,10 @@
   const NOISE_RATE = 9;
   const CLOSE_RANGE_FACTOR = 0.3; // 視界内でこの距離まで近づかれると即アウト
 
-  let state, player, items, guards, floats, scrollY, best;
+  // 最初は浜辺のみ解放。時間経過だけで、より高価なエリアが解放されていく
+  const ZONE_UNLOCK = [null, {time:22}, {time:52}];
+
+  let state, player, items, guards, floats, scrollY, best, zoneUnlocked;
 
   function resetGame(){
     state = 'playing';
@@ -309,11 +331,13 @@
     money = 0;
     timeLeft = TIME_LIMIT;
     detection = 0;
+    zoneUnlocked = [true, false, false];
     document.getElementById('startScreen').classList.add('hidden');
     document.getElementById('endScreen').classList.add('hidden');
   }
   let money=0, timeLeft=TIME_LIMIT, detection=0;
   best = Number(localStorage.getItem('mitsuryou_best')||0);
+  zoneUnlocked = [true, false, false];
 
   function inHideSpot(x,y){
     for(const h of HIDE_SPOTS){
@@ -353,6 +377,8 @@
     function blockedAt(px,py){
       if(px<18 || px>WORLD_W-18 || py<18 || py>WORLD_H-18) return true;
       for(const w of WALLS){ if(circleRectHit(px,py,player.r*0.8,w)) return true; }
+      if(!zoneUnlocked[1] && py > ZONE_H-20) return true;
+      if(!zoneUnlocked[2] && py > ZONE_H*2-20) return true;
       return false;
     }
     const tryX = player.x + dx*spd*dt;
@@ -407,7 +433,7 @@
       // これがないと、音の方向へ向いた瞬間に視界チェックへ再突入してしまい、
       // 「止まる」演出が実質1フレームで終わってしまう。
       if(g.aiState === 'freeze') seen = false;
-      const noiseRadius = mode==='run' ? g.noise : (mode==='walk' ? g.noise*0.62 : 0);
+      const noiseRadius = mode==='run' ? g.noise : (mode==='walk' ? g.noise*0.7 : 0);
       const heard = !seen && pdist0 < noiseRadius;
 
       if(seen){
@@ -421,12 +447,13 @@
       if(heard && g.aiState === 'patrol'){
         // 完全停止時は「プレイヤーの方向」ではなく、その瞬間に監視員が向いていた方向で固定する
         g.aiState = 'freeze'; g.stateTimer = 1.0; g.baseAngle = g.facing;
+        g.noiseAngle = Math.atan2(pdy0,pdx0); // 停止した瞬間プレイヤーがいた方向（見回しで使う）
       } else if(heard && g.aiState === 'investigate'){
-        g.stateTimer = 1.8; g.baseAngle = Math.atan2(pdy0,pdx0);
+        g.stateTimer = 1.8; // 見回しの向きは停止時のまま固定。時間だけ延長する
       } else if(g.aiState === 'freeze'){
         // 音が聞こえ続けていてもタイマーは延長しない（張り付いて動かなくなるのを防ぐ）
         g.stateTimer -= dt;
-        if(g.stateTimer <= 0){ g.aiState = 'investigate'; g.stateTimer = 1.8; g.sweepT = 0; }
+        if(g.stateTimer <= 0){ g.aiState = 'investigate'; g.stateTimer = 1.8; g.sweepT = 0; g.baseAngle = g.noiseAngle; }
       } else if(g.aiState === 'investigate'){
         g.stateTimer -= dt;
         if(g.stateTimer <= 0) g.aiState = 'patrol';
@@ -465,11 +492,24 @@
       }
       g.alert = g.aiState==='chase' ? 1 : (g.aiState==='investigate'||g.aiState==='search'||g.aiState==='freeze' ? 0.5 : Math.max(0,g.alert-dt*2));
 
-      if(!seen) continue;
+      // ここまでの視界チェックは「移動・向き更新前」の状態で行っていたため、
+      // 見回し中などに描画されるコーンと1フレームずれることがあった。
+      // 実際に画面に描かれる向き・位置で改めて視界判定をやり直してから、
+      // 即摘発・警戒度の蓄積を行う。
+      const pdxF = player.x-g.x, pdyF = player.y-g.y;
+      const pdistF = Math.hypot(pdxF,pdyF);
+      let seenFinal = false;
+      if(pdistF < g.range && !sightBlocked(g.x, g.y, player.x, player.y)){
+        const angF = Math.atan2(pdyF,pdxF);
+        if(angleDiff(angF, g.facing) < (g.coneAngle*Math.PI/180)) seenFinal = true;
+      }
+      if(g.aiState === 'freeze') seenFinal = false;
+
+      if(!seenFinal) continue;
 
       // 視界に入った状態でここまで近づかれると、隠れていない限り即摘発
       const closeRange = g.range * CLOSE_RANGE_FACTOR;
-      if(!playerHidden && pdist0 < closeRange){
+      if(!playerHidden && pdistF < closeRange){
         endGame('caught'); return;
       }
 
@@ -483,6 +523,17 @@
 
     for(const f of floats){ f.life -= dt; f.y += f.vy*dt; }
     floats = floats.filter(f=>f.life>0);
+
+    const elapsed = TIME_LIMIT - timeLeft;
+    for(let zi=1; zi<=2; zi++){
+      if(!zoneUnlocked[zi]){
+        const cond = ZONE_UNLOCK[zi];
+        if(elapsed >= cond.time){
+          zoneUnlocked[zi] = true;
+          floats.push({x:450, y:ZONE_H*zi - 30, text:ZONES[zi].name+'が解放された！', life:2.2, vy:-14});
+        }
+      }
+    }
 
     timeLeft -= dt;
     if(timeLeft <= 0){ timeLeft = 0; endGame('clear'); return; }
@@ -649,14 +700,30 @@
     for(let y = -((scrollY)%40); y < CH; y += 40){
       ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CW,y); ctx.stroke();
     }
-    // zone boundary lines
-    ctx.strokeStyle = 'rgba(223,232,236,0.15)';
-    ctx.setLineDash([6,6]);
-    for(const b of [ZONE_H, ZONE_H*2]){
+    // zone boundary lines / 封鎖バリア
+    for(let zi=1; zi<=2; zi++){
+      const b = ZONE_H*zi;
       const sy = b - scrollY;
-      if(sy>-2 && sy<CH+2){ ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(CW,sy); ctx.stroke(); }
+      if(sy < -30 || sy > CH+30) continue;
+      if(zoneUnlocked[zi]){
+        ctx.strokeStyle = 'rgba(223,232,236,0.15)';
+        ctx.setLineDash([6,6]);
+        ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(CW,sy); ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(209,69,59,0.55)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([14,10]);
+        ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(CW,sy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = "bold 15px 'DotGothic16'";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#d1453b';
+        ctx.fillText('closed - '+ZONES[zi].name, CW/2, sy-8);
+        ctx.restore();
+      }
     }
-    ctx.setLineDash([]);
   }
 
   function drawHideSpots(){
@@ -728,6 +795,22 @@
     document.getElementById('moneyVal').textContent = '¥'+money.toLocaleString();
     document.getElementById('detectFill').style.width = detection+'%';
     document.getElementById('zoneTag').textContent = ZONES[zoneAt(player.y)].name;
+
+    const elapsedNow = TIME_LIMIT - timeLeft;
+    const lockEls = [null, {row:document.getElementById('lockIso'), status:document.getElementById('lockIsoStatus')},
+                            {row:document.getElementById('lockSea'), status:document.getElementById('lockSeaStatus')}];
+    for(let zi=1; zi<=2; zi++){
+      const el = lockEls[zi];
+      if(zoneUnlocked[zi]){
+        el.row.classList.add('unlocked');
+        el.status.textContent = '解放済み';
+      } else {
+        el.row.classList.remove('unlocked');
+        const remain = Math.max(0, Math.ceil(ZONE_UNLOCK[zi].time - elapsedNow));
+        el.status.textContent = 'あと'+remain+'秒';
+      }
+    }
+
     const v = document.getElementById('vignette');
     if(detection > 55){
       const inten = (detection-55)/45;
