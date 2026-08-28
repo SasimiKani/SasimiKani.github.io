@@ -204,8 +204,8 @@
     </div>
     <div class="controls">
       <div><span>↑↓←→ / WASD</span>移動</div>
-      <div><span>Shift</span>走る（速いが目立つ）</div>
-      <div><span>Ctrl</span>しゃがむ（遅いが隠れやすい）</div>
+      <div><span>Shift</span>しゃがむ（遅いが隠れやすい）</div>
+      <div><span>Ctrl</span>走る（速いが目立つ）</div>
       <div><span>Space</span>その場で採取</div>
     </div>
     <button id="startBtn">漁場へ忍び込む</button>
@@ -248,14 +248,9 @@
     awabi:  {name:'アワビ', value:6000, color:'#cdb37a', dark:'#8a7549', r:20, kind:'shell'}
   };
 
-  const SPAWNS = [
-    {x:150,y:150,type:'kelp'}, {x:650,y:180,type:'kelp'}, {x:400,y:90,type:'hotate'},
-    {x:220,y:660,type:'kelp'}, {x:760,y:610,type:'hotate'}, {x:520,y:710,type:'kelp'},
-    {x:180,y:950,type:'sazae'}, {x:710,y:1000,type:'uni'}, {x:400,y:900,type:'sazae'},
-    {x:600,y:1300,type:'uni'}, {x:250,y:1460,type:'sazae'}, {x:750,y:1400,type:'uni'},
-    {x:210,y:1760,type:'namako'}, {x:660,y:1810,type:'awabi'}, {x:450,y:2010,type:'namako'},
-    {x:160,y:2220,type:'awabi'}, {x:700,y:2260,type:'namako'}, {x:410,y:2160,type:'awabi'}
-  ];
+  // ゾーンごとに出現しうる魚介類の種類
+  const ZONE_ITEM_TYPES = [['kelp','hotate'], ['sazae','uni'], ['namako','awabi']];
+  const ZONE_RANGES = [{top:0,bottom:ZONE_H}, {top:ZONE_H,bottom:ZONE_H*2}, {top:ZONE_H*2,bottom:ZONE_H*3}];
 
   const HIDE_SPOTS = [
     {x:100,y:300,r:42},{x:800,y:420,r:48},{x:300,y:600,r:38},{x:620,y:120,r:36},
@@ -263,15 +258,29 @@
     {x:250,y:1900,r:48},{x:660,y:2060,r:52},{x:400,y:2300,r:48},{x:80,y:2100,r:44}
   ];
 
-  // solid obstacles (rocks) - block movement AND line of sight. Sparse & open on the
-  // cheap beach, denser and more maze-like the deeper (and more valuable) the zone gets.
-  const WALLS = [
-    {x:360,y:310,w:90,h:50}, {x:560,y:470,w:70,h:70}, {x:230,y:520,w:60,h:90},
-    {x:270,y:990,w:80,h:60}, {x:610,y:1070,w:70,h:90}, {x:290,y:1250,w:60,h:70},
-    {x:590,y:1400,w:90,h:60}, {x:480,y:1120,w:55,h:55},
-    {x:390,y:1740,w:100,h:60}, {x:440,y:1950,w:80,h:70}, {x:340,y:2200,w:90,h:60},
-    {x:600,y:2250,w:70,h:80}, {x:500,y:2050,w:60,h:90}, {x:230,y:2080,w:60,h:60}
-  ];
+  // 壁(岩)はゲーム開始のたびにランダム配置。浜辺は疎らに、沖の海ほど密な迷路状にする。
+  let WALLS = [];
+  const WALL_ZONE_COUNTS = [[2,4],[4,6],[6,8]];
+  function rand(min,max){ return min + Math.random()*(max-min); }
+  function generateWalls(){
+    const walls = [];
+    for(let zi=0; zi<3; zi++){
+      const zr = ZONE_RANGES[zi];
+      const [cMin,cMax] = WALL_ZONE_COUNTS[zi];
+      const count = Math.round(rand(cMin,cMax));
+      for(let n=0; n<count; n++){
+        let placed = false;
+        for(let attempt=0; attempt<15 && !placed; attempt++){
+          const w = rand(50,100), h = rand(50,90);
+          const x = rand(90, WORLD_W-90);
+          const y = rand(zr.top+90, zr.bottom-90);
+          const tooClose = walls.some(o => Math.hypot(o.x-x,o.y-y) < 130);
+          if(!tooClose){ walls.push({x,y,w,h}); placed = true; }
+        }
+      }
+    }
+    return walls;
+  }
   function circleRectHit(cx,cy,cr,rect){
     const rx1=rect.x-rect.w/2, rx2=rect.x+rect.w/2, ry1=rect.y-rect.h/2, ry2=rect.y+rect.h/2;
     const nx = Math.max(rx1, Math.min(cx, rx2));
@@ -308,7 +317,7 @@
   const KEYMAP = {
     ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
     ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
-    ShiftLeft:'run', ShiftRight:'run', ControlLeft:'crouch', ControlRight:'crouch',
+    ShiftLeft:'crouch', ShiftRight:'crouch', ControlLeft:'run', ControlRight:'run',
     Space:'grab'
   };
   window.addEventListener('keydown', e=>{
@@ -320,10 +329,17 @@
 
   const TIME_LIMIT = 90;
   const GRAB_TIME = 1.1;
-  const RESPAWN_TIME = 14;
   const DETECT_RATE = 14;   // 警戒度は自動回復しないため、じわじわ蓄積する形に調整
   const NOISE_RATE = 9;
   const CLOSE_RANGE_FACTOR = 0.3; // 視界内でこの距離まで近づかれると即アウト
+
+  // 魚介類はフィールド上の個数に応じてポップ頻度が変わる。少なければ早く、
+  // 多ければゆっくりポップする。
+  const TARGET_ITEM_COUNT = 14;
+  const MAX_ITEM_COUNT = 20;
+  const BASE_ITEM_INTERVAL = 3.0;
+  const MIN_ITEM_INTERVAL = 0.8;
+  const MAX_ITEM_INTERVAL = 6.0;
 
   // 最初は浜辺のみ解放。時間経過だけで、より高価なエリアが解放されていく
   const ZONE_UNLOCK = [null, {time:22}, {time:52}];
@@ -332,12 +348,42 @@
   // 足を踏み入れるまでタイマーも監視員の脅威も動かず、一度出たら二度と戻れない。
   const SAFE_ZONE = {top: WORLD_TOP, bottom: 0};
 
-  let state, player, items, guards, floats, scrollY, best, zoneUnlocked, leftSafeZone;
+  let state, player, items, guards, floats, scrollY, best, zoneUnlocked, leftSafeZone, itemSpawnTimer, itemIdSeq;
+
+  function itemFits(x,y,r){
+    for(const w of WALLS){ if(circleRectHit(x,y,r+8,w)) return false; }
+    for(const it of items){ if(Math.hypot(it.x-x,it.y-y) < 42) return false; }
+    return true;
+  }
+  function trySpawnItem(){
+    if(items.length >= MAX_ITEM_COUNT) return;
+    // 一番アイテムが少ないゾーンを優先して埋める
+    const counts = [0,0,0];
+    for(const it of items) counts[zoneAt(it.y)]++;
+    let zi = 0;
+    for(let i=1;i<3;i++){ if(counts[i] < counts[zi]) zi = i; }
+    const zr = ZONE_RANGES[zi];
+    const types = ZONE_ITEM_TYPES[zi];
+    const type = types[Math.floor(Math.random()*types.length)];
+    const def = ITEM_DEFS[type];
+    for(let attempt=0; attempt<12; attempt++){
+      const x = rand(40, WORLD_W-40);
+      const y = rand(zr.top+40, zr.bottom-40);
+      if(itemFits(x,y,def.r)){
+        items.push({id:itemIdSeq++, x, y, type});
+        return;
+      }
+    }
+  }
 
   function resetGame(){
     state = 'playing';
     player = {x:450, y:-130, r:18, vx:0, vy:0, speed:0, mode:'walk', channel:0, channelTarget:-1};
-    items = SPAWNS.map((s,i)=>({id:i, x:s.x, y:s.y, type:s.type, collected:false, respawnAt:0}));
+    WALLS = generateWalls();
+    items = [];
+    itemIdSeq = 0;
+    for(let i=0;i<9;i++) trySpawnItem(); // 開始時に何もない状態を避けるための初期ポップ
+    itemSpawnTimer = 1.0;
     guards = GUARD_BASE.map(g=>({...g, x:g.waypoints[0].x, y:g.waypoints[0].y, wpIndex:0, facing:0, alert:0, aiState:'patrol', stateTimer:0, sweepT:0}));
     floats = [];
     scrollY = 0;
@@ -410,22 +456,21 @@
 
     // grabbing
     if(!moving && KEY.grab){
-      let nearest = -1, nd = 34;
-      for(const it of items){
-        if(it.collected) continue;
-        const d = Math.hypot(player.x-it.x, player.y-it.y);
-        if(d < nd){ nd = d; nearest = it.id; }
+      let nearestIdx = -1, nd = 34;
+      for(let i=0;i<items.length;i++){
+        const d = Math.hypot(player.x-items[i].x, player.y-items[i].y);
+        if(d < nd){ nd = d; nearestIdx = i; }
       }
-      if(nearest !== -1){
-        if(player.channelTarget !== nearest){ player.channelTarget = nearest; player.channel = 0; }
+      if(nearestIdx !== -1){
+        const nearestId = items[nearestIdx].id;
+        if(player.channelTarget !== nearestId){ player.channelTarget = nearestId; player.channel = 0; }
         player.channel += dt;
         if(player.channel >= GRAB_TIME){
-          const it = items[nearest];
-          it.collected = true;
-          it.respawnAt = timeLeft - RESPAWN_TIME;
+          const it = items[nearestIdx];
           const def = ITEM_DEFS[it.type];
           money += def.value;
           floats.push({x:it.x, y:it.y, text:'+¥'+def.value.toLocaleString(), life:1.2, vy:-30});
+          items.splice(nearestIdx,1);
           player.channel = 0; player.channelTarget = -1;
         }
       } else { player.channel = 0; player.channelTarget = -1; }
@@ -433,9 +478,12 @@
       player.channel = 0; player.channelTarget = -1;
     }
 
-    // items respawn
-    for(const it of items){
-      if(it.collected && timeLeft <= it.respawnAt){ it.collected = false; }
+    // 魚介類のポップ：フィールド上の個数が少ないほど早く、多いほどゆっくりポップする
+    itemSpawnTimer -= dt;
+    if(itemSpawnTimer <= 0){
+      trySpawnItem();
+      const ratio = Math.min(1.4, items.length/TARGET_ITEM_COUNT);
+      itemSpawnTimer = Math.min(MAX_ITEM_INTERVAL, Math.max(MIN_ITEM_INTERVAL, BASE_ITEM_INTERVAL*(0.35+ratio)));
     }
 
     // guards: patrol -> chase (spotted) -> search (lost sight, sweeps last-known spot) -> patrol
@@ -833,10 +881,10 @@
     drawHideSpots();
     drawWalls();
     drawSafeZone();
-    for(const it of items){ if(!it.collected){
+    for(const it of items){
       const sy = it.y - scrollY;
       if(sy > -40 && sy < CH+40) drawItem(it);
-    }}
+    }
     for(const g of guards) drawGuard(g);
     drawPlayer();
     ctx.textAlign='center';
@@ -899,7 +947,9 @@
 
   state = 'start';
   player = {x:450, y:-130, r:18, vx:0, vy:0, mode:'idle', channel:0, channelTarget:-1};
-  items = SPAWNS.map((s,i)=>({id:i, x:s.x, y:s.y, type:s.type, collected:false, respawnAt:0}));
+  items = [];
+  itemIdSeq = 0;
+  itemSpawnTimer = 1.0;
   guards = GUARD_BASE.map(g=>({...g}));
   floats = [];
   scrollY = 0;
