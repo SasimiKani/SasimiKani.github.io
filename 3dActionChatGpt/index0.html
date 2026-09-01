@@ -1,0 +1,8300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Athletic Stage Prototype</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #101217;
+    font-family: system-ui, sans-serif;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    outline: none;
+  }
+
+  #info {
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    padding: 8px 10px;
+    color: white;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  #status {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    color: rgba(255,255,255,0.9);
+    font-size: 13px;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  #goalMessage {
+    position: fixed;
+    left: 50%;
+    top: 28%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: rgb(255, 225, 100);
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1.05;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+    pointer-events: none;
+    user-select: none;
+    display: none;
+  }
+
+  #goalMessage small {
+    display: block;
+    margin-top: 8px;
+    color: rgba(255,255,255,0.94);
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  #resetButton {
+    position: fixed;
+    right: 12px;
+    top: 12px;
+    min-width: 92px;
+    min-height: 42px;
+    padding: 8px 14px;
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.55);
+    color: white;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  #resetButton:hover {
+    background: rgba(255,255,255,0.12);
+  }
+
+  #resetButton:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+
+  #stageControls {
+    position: fixed;
+    right: 116px;
+    top: 12px;
+    min-height: 42px;
+    padding: 6px 10px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.55);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  #stageSelect {
+    min-height: 30px;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 6px;
+    background: #20242c;
+    color: white;
+    padding: 3px 8px;
+    font: inherit;
+  }
+
+  #stageSelect:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+
+<div id="info">
+  ↑ ↓ ← → : 移動<br>
+  Z : ジャンプ（離すと上昇を急減速）<br>
+  Q / E : カメラ左右回転<br>
+  W / S : 見上げ / 見下ろし<br>
+  R / F : ズームイン / ズームアウト<br>
+  カメラ操作 : ほぼ一定速度＋開始/停止だけ短く滑らか<br>青緑 = リフト（側面接触で押される） / 橙系 = 乗ると落ちる足場<br>  曲面フィールド = 一枚の連続地形メッシュ<br>
+  <span id="stageDescription">テストステージ : 曲面足場を含む高さ方向の複数ルートアスレチック</span><br>閉じたポリゴン立体・上下挟み込み保護
+</div>
+
+<div id="status"></div>
+<div id="goalMessage">GOAL!<small id="goalDetail">TEST STAGE</small></div>
+
+<div id="stageControls">
+  <label for="stageSelect">ステージ</label>
+  <select id="stageSelect">
+    <option value="test">テストステージ</option>
+    <option value="horizontal">水平アスレチック</option>
+    <option value="curvedField">曲面フィールド</option>
+  </select>
+</div>
+
+<button id="resetButton" type="button">リセット</button>
+
+<script>
+(() => {
+  "use strict";
+
+  // =========================================================
+  // Canvas
+  // =========================================================
+
+  const canvas = document.getElementById("game");
+  const gl = canvas.getContext("webgl2", {
+    antialias: true,
+    depth: true,
+    alpha: false
+  });
+
+  if (!gl) {
+    throw new Error("このブラウザではWebGL2を利用できない");
+  }
+
+  const statusEl = document.getElementById("status");
+  const goalMessageEl = document.getElementById("goalMessage");
+  const goalDetailEl = document.getElementById("goalDetail");
+  const resetButton = document.getElementById("resetButton");
+  const stageSelect = document.getElementById("stageSelect");
+  const stageDescriptionEl = document.getElementById("stageDescription");
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    canvas.width = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+
+    canvas.style.width = innerWidth + "px";
+    canvas.style.height = innerHeight + "px";
+
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+
+  addEventListener("resize", resize);
+  resize();
+
+  canvas.focus();
+
+  canvas.addEventListener("pointerdown", () => {
+    canvas.focus();
+  });
+
+  // =========================================================
+  // 入力
+  // =========================================================
+
+  const keys = new Set();
+
+  function normalizeKey(e) {
+    if (e.key === "ArrowUp") return "ArrowUp";
+    if (e.key === "ArrowDown") return "ArrowDown";
+    if (e.key === "ArrowLeft") return "ArrowLeft";
+    if (e.key === "ArrowRight") return "ArrowRight";
+
+    if (e.key === "z" || e.key === "Z") return "KeyZ";
+    if (e.key === "q" || e.key === "Q") return "KeyQ";
+    if (e.key === "e" || e.key === "E") return "KeyE";
+    if (e.key === "w" || e.key === "W") return "KeyW";
+    if (e.key === "s" || e.key === "S") return "KeyS";
+    if (e.key === "r" || e.key === "R") return "KeyR";
+    if (e.key === "f" || e.key === "F") return "KeyF";
+
+    return e.code;
+  }
+
+  document.addEventListener("keydown", e => {
+    const key = normalizeKey(e);
+
+    if (
+      key === "ArrowUp" ||
+      key === "ArrowDown" ||
+      key === "ArrowLeft" ||
+      key === "ArrowRight" ||
+      key === "KeyZ" ||
+      key === "KeyQ" ||
+      key === "KeyE" ||
+      key === "KeyW" ||
+      key === "KeyS" ||
+      key === "KeyR" ||
+      key === "KeyF"
+    ) {
+      e.preventDefault();
+      keys.add(key);
+    }
+  });
+
+  document.addEventListener("keyup", e => {
+    keys.delete(normalizeKey(e));
+  });
+
+  addEventListener("blur", () => {
+    keys.clear();
+  });
+
+  // =========================================================
+  // Utility
+  // =========================================================
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function approachValue(current, target, maxDelta) {
+    if (current < target) {
+      return Math.min(current + maxDelta, target);
+    }
+
+    if (current > target) {
+      return Math.max(current - maxDelta, target);
+    }
+
+    return target;
+  }
+
+  function normalizeAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+
+  function approachAngle(current, target, maxStep) {
+    let diff = normalizeAngle(target - current);
+    diff = clamp(diff, -maxStep, maxStep);
+    return normalizeAngle(current + diff);
+  }
+
+  function hypot2(x, z) {
+    return Math.hypot(x, z);
+  }
+
+  // =========================================================
+  // 3Dオブジェクト
+  // =========================================================
+
+  function createBox(x, y, z, w, h, d, color, solid = true) {
+    return {
+      x, y, z,
+      w, h, d,
+      color,
+      solid
+    };
+  }
+
+
+  // =========================================================
+  // 三角ポリゴンメッシュ
+  //
+  // vertices  : [[x,y,z], ...] のローカル頂点
+  // triangles : [[i0,i1,i2], ...] の頂点番号
+  //
+  // 三角形の頂点順は、外側から見て反時計回り(CCW)を基本にする
+  // 同じ三角形を描画と当たり判定の両方に使う
+  // =========================================================
+
+  function vec3Sub(a, b) {
+    return {
+      x: a.x - b.x,
+      y: a.y - b.y,
+      z: a.z - b.z
+    };
+  }
+
+  function vec3Cross(a, b) {
+    return {
+      x: a.y * b.z - a.z * b.y,
+      y: a.z * b.x - a.x * b.z,
+      z: a.x * b.y - a.y * b.x
+    };
+  }
+
+  function vec3Dot(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  function vec3Length(v) {
+    return Math.hypot(v.x, v.y, v.z);
+  }
+
+  function vec3Normalize(v) {
+    const len = vec3Length(v) || 1;
+
+    return {
+      x: v.x / len,
+      y: v.y / len,
+      z: v.z / len
+    };
+  }
+
+  function transformMeshVertex(mesh, vertex) {
+    const c = Math.cos(mesh.yaw);
+    const s = Math.sin(mesh.yaw);
+
+    const sx = vertex[0] * mesh.scaleX;
+    const sy = vertex[1] * mesh.scaleY;
+    const sz = vertex[2] * mesh.scaleZ;
+
+    return {
+      x: mesh.x + sx * c - sz * s,
+      y: mesh.y + sy,
+      z: mesh.z + sx * s + sz * c
+    };
+  }
+
+  function rebuildMeshTriangles(mesh) {
+    mesh.worldVertices =
+      mesh.vertices.map(v => transformMeshVertex(mesh, v));
+
+    mesh.worldTriangles = [];
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let maxZ = -Infinity;
+
+    let centerX = 0;
+    let centerY = 0;
+    let centerZ = 0;
+
+    for (const v of mesh.worldVertices) {
+      minX = Math.min(minX, v.x);
+      minY = Math.min(minY, v.y);
+      minZ = Math.min(minZ, v.z);
+      maxX = Math.max(maxX, v.x);
+      maxY = Math.max(maxY, v.y);
+      maxZ = Math.max(maxZ, v.z);
+
+      centerX += v.x;
+      centerY += v.y;
+      centerZ += v.z;
+    }
+
+    const vertexCount =
+      Math.max(1, mesh.worldVertices.length);
+
+    mesh.center = {
+      x: centerX / vertexCount,
+      y: centerY / vertexCount,
+      z: centerZ / vertexCount
+    };
+
+    mesh.bounds = {
+      minX, minY, minZ,
+      maxX, maxY, maxZ
+    };
+
+    for (const indices of mesh.triangles) {
+      let a =
+        mesh.worldVertices[indices[0]];
+
+      let b =
+        mesh.worldVertices[indices[1]];
+
+      let c =
+        mesh.worldVertices[indices[2]];
+
+      let center = {
+        x: (a.x + b.x + c.x) / 3,
+        y: (a.y + b.y + c.y) / 3,
+        z: (a.z + b.z + c.z) / 3
+      };
+
+      let ab = vec3Sub(b, a);
+      let ac = vec3Sub(c, a);
+
+      let normal =
+        vec3Normalize(
+          vec3Cross(ab, ac)
+        );
+
+      // -----------------------------------------------------
+      // 閉じた立体では法線を必ず外向きに固定する
+      //
+      // これにより
+      //   上面  -> +Y
+      //   底面  -> -Y
+      //   側面  -> 外側
+      //
+      // という意味を衝突判定でも保持できる
+      // -----------------------------------------------------
+
+      if (
+        mesh.closedSolid &&
+        !mesh.preserveWinding
+      ) {
+        const fromMeshCenter = {
+          x: center.x - mesh.center.x,
+          y: center.y - mesh.center.y,
+          z: center.z - mesh.center.z
+        };
+
+        if (
+          vec3Dot(
+            normal,
+            fromMeshCenter
+          ) < 0
+        ) {
+          // 頂点順を反転
+          const temp = b;
+          b = c;
+          c = temp;
+
+          ab = vec3Sub(b, a);
+          ac = vec3Sub(c, a);
+
+          normal =
+            vec3Normalize(
+              vec3Cross(ab, ac)
+            );
+
+          center = {
+            x: (a.x + b.x + c.x) / 3,
+            y: (a.y + b.y + c.y) / 3,
+            z: (a.z + b.z + c.z) / 3
+          };
+        }
+      }
+
+      const triangle = {
+        a, b, c,
+
+        // 面固有の外向き法線
+        normal,
+
+        center,
+
+        bounds: {
+          minX: Math.min(a.x, b.x, c.x),
+          minY: Math.min(a.y, b.y, c.y),
+          minZ: Math.min(a.z, b.z, c.z),
+          maxX: Math.max(a.x, b.x, c.x),
+          maxY: Math.max(a.y, b.y, c.y),
+          maxZ: Math.max(a.z, b.z, c.z)
+        }
+      };
+
+      mesh.worldTriangles.push(triangle);
+    }
+  }
+
+  function createTriMesh(
+    x,
+    y,
+    z,
+    vertices,
+    triangles,
+    color,
+    solid = true,
+    yaw = 0,
+    scaleX = 1,
+    scaleY = 1,
+    scaleZ = 1
+  ) {
+    const mesh = {
+      type: "mesh",
+      x, y, z,
+      yaw,
+      scaleX,
+      scaleY,
+      scaleZ,
+      vertices,
+      triangles,
+      color,
+      solid,
+
+      // 足場・障害物は閉じた立体として扱う
+      // 底面・側面・上面すべてが衝突面になる
+      closedSolid: solid,
+
+      gpu: null,
+      worldVertices: [],
+      worldTriangles: [],
+      bounds: null,
+      center: null
+    };
+
+    rebuildMeshTriangles(mesh);
+    return mesh;
+  }
+
+  // 斜面を持つ三角柱
+  // lowZ側ではなく +Z側が低く、-Z側が高い
+  function createWedgeMesh(x, y, z, w, d, h, color, yaw = 0) {
+    const hw = w / 2;
+    const hd = d / 2;
+
+    const vertices = [
+      [-hw, 0,  hd], // 0 低い側 左
+      [ hw, 0,  hd], // 1 低い側 右
+      [-hw, h, -hd], // 2 高い側 左
+      [ hw, h, -hd], // 3 高い側 右
+      [-hw, 0, -hd], // 4 底面 奥左
+      [ hw, 0, -hd]  // 5 底面 奥右
+    ];
+
+    const triangles = [
+      // 斜面
+      [0, 1, 3],
+      [0, 3, 2],
+
+      // 底面
+      [0, 4, 5],
+      [0, 5, 1],
+
+      // 高い側の垂直面
+      [4, 2, 3],
+      [4, 3, 5],
+
+      // 左右の三角面
+      [0, 2, 4],
+      [1, 5, 3]
+    ];
+
+    return createTriMesh(
+      x, y, z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+
+  // 凸多角形をそのまま押し出して足場にする
+  // polygon は [[x,z], ...] を上から見て時計回りに並べる
+  function createPolygonPlatform(
+    x,
+    topY,
+    z,
+    polygon,
+    thickness,
+    color,
+    yaw = 0
+  ) {
+    const bottomY = -thickness;
+    const vertices = [];
+
+    // bottom vertices
+    for (const [px, pz] of polygon) {
+      vertices.push([px, bottomY, pz]);
+    }
+
+    // top vertices
+    for (const [px, pz] of polygon) {
+      vertices.push([px, 0, pz]);
+    }
+
+    const n = polygon.length;
+    const triangles = [];
+
+    // top: +Y normal
+    for (let i = 1; i < n - 1; i++) {
+      triangles.push([
+        n,
+        n + i,
+        n + i + 1
+      ]);
+    }
+
+    // bottom: -Y normal
+    for (let i = 1; i < n - 1; i++) {
+      triangles.push([
+        0,
+        i + 1,
+        i
+      ]);
+    }
+
+    // sides
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+
+      triangles.push([
+        i,
+        j,
+        n + j
+      ]);
+
+      triangles.push([
+        i,
+        n + j,
+        n + i
+      ]);
+    }
+
+    return createTriMesh(
+      x,
+      topY,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  function createTrianglePlatform(
+    x, topY, z,
+    w, d,
+    thickness,
+    color,
+    yaw = 0
+  ) {
+    return createPolygonPlatform(
+      x,
+      topY,
+      z,
+      [
+        [-w / 2, -d / 2],
+        [ 0,       d / 2],
+        [ w / 2,  -d / 2]
+      ],
+      thickness,
+      color,
+      yaw
+    );
+  }
+
+  function createTrapezoidPlatform(
+    x, topY, z,
+    frontW,
+    backW,
+    d,
+    thickness,
+    color,
+    yaw = 0
+  ) {
+    return createPolygonPlatform(
+      x,
+      topY,
+      z,
+      [
+        [-backW / 2, -d / 2],
+        [-frontW / 2, d / 2],
+        [ frontW / 2, d / 2],
+        [ backW / 2, -d / 2]
+      ],
+      thickness,
+      color,
+      yaw
+    );
+  }
+
+  function createHexPlatform(
+    x, topY, z,
+    radiusX,
+    radiusZ,
+    thickness,
+    color,
+    yaw = 0
+  ) {
+    const polygon = [];
+
+    // 時計回り
+    for (let i = 0; i < 6; i++) {
+      const a =
+        -Math.PI / 2 -
+        i * Math.PI / 3;
+
+      polygon.push([
+        Math.cos(a) * radiusX,
+        Math.sin(a) * radiusZ
+      ]);
+    }
+
+    return createPolygonPlatform(
+      x,
+      topY,
+      z,
+      polygon,
+      thickness,
+      color,
+      yaw
+    );
+  }
+
+  function createDiamondPlatform(
+    x, topY, z,
+    w, d,
+    thickness,
+    color,
+    yaw = 0
+  ) {
+    return createPolygonPlatform(
+      x,
+      topY,
+      z,
+      [
+        [ 0,      -d / 2],
+        [-w / 2,   0],
+        [ 0,       d / 2],
+        [ w / 2,   0]
+      ],
+      thickness,
+      color,
+      yaw
+    );
+  }
+
+  // 4隅の高さが違う、少しねじれた足場
+  function createTwistedPlatform(
+    x,
+    baseTopY,
+    z,
+    w,
+    d,
+    heights,
+    thickness,
+    color,
+    yaw = 0
+  ) {
+    const hw = w / 2;
+    const hd = d / 2;
+
+    const top = [
+      [-hw, heights[0], -hd],
+      [-hw, heights[1],  hd],
+      [ hw, heights[2],  hd],
+      [ hw, heights[3], -hd]
+    ];
+
+    const vertices = [
+      [top[0][0], top[0][1] - thickness, top[0][2]],
+      [top[1][0], top[1][1] - thickness, top[1][2]],
+      [top[2][0], top[2][1] - thickness, top[2][2]],
+      [top[3][0], top[3][1] - thickness, top[3][2]],
+
+      top[0],
+      top[1],
+      top[2],
+      top[3]
+    ];
+
+    const triangles = [
+      // top
+      [4, 5, 6],
+      [4, 6, 7],
+
+      // bottom
+      [0, 2, 1],
+      [0, 3, 2],
+
+      // sides
+      [0, 1, 5], [0, 5, 4],
+      [1, 2, 6], [1, 6, 5],
+      [2, 3, 7], [2, 7, 6],
+      [3, 0, 4], [3, 4, 7]
+    ];
+
+    return createTriMesh(
+      x,
+      baseTopY,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  const PLAYER_START = {
+    x: -11.5,
+    y: 0.75,
+    z: 16.4,
+    angle: 0
+  };
+
+  const player = createBox(
+    PLAYER_START.x,
+    PLAYER_START.y,
+    PLAYER_START.z,
+    1.2, 1.5, 1.2,
+    "#ffcf4d",
+    true
+  );
+
+  // 水平速度
+  player.vx = 0;
+  player.vz = 0;
+
+  // 向き
+  // 0 = -Z方向
+  player.angle = 0;
+
+  // 地上移動
+  player.groundAcceleration = 20.0;
+  player.groundDeceleration = 24.0;
+  player.groundMaxSpeed = 7.2;
+  player.groundTurnSpeed = 7.0;
+
+  // 空中制御
+  player.airAcceleration = 2.8;
+  player.airMaxSpeed = 7.6;
+  player.airTurnSpeed = 1.6;
+  player.airDrag = 0.18;
+
+  // 強い逆入力時の減速
+  player.reverseBrake = 28.0;
+
+  // 三角ポリゴンは厚み0の面なので、
+  // 高速移動時に1フレームで飛び越えないよう
+  // 移動をこの距離以下のサブステップへ分割する
+  player.collisionStep = 0.08;
+
+  // ジャンプ
+  player.verticalSpeed = 0;
+  player.isGrounded = true;
+
+  // =======================================================
+  // ジャンプ
+  //
+  // 1. ジャンプ開始時にだけ上向き初速を与える
+  // 2. その後は常に重力で上昇速度が減っていく
+  // 3. Zを離した瞬間、まだ上昇中なら速度を急減衰させる
+  // 4. 頂点を越えると自然に落下
+  // =======================================================
+
+  // ジャンプ開始時の上向き初速
+  player.jumpInitialSpeed = 10.5;
+
+  // 常に掛かる重力加速度
+  player.gravity = 21.0;
+
+  // Zを離したとき、上昇速度をこの割合まで一気に落とす
+  // 0.35 = 残り35%
+  player.jumpReleaseVelocityMultiplier = 0.35;
+
+  // 落下速度の上限
+  player.maxFallSpeed = 16.0;
+
+  // 念のための最大上昇量
+  player.maxJumpRise = 4.1;
+
+  player.jumpStartY = player.y;
+
+  // ジャンプ中にZを一度離したか
+  player.jumpReleased = false;
+
+  // 最大高度到達後、Zを離すまで再ジャンプを禁止
+  player.jumpLocked = false;
+
+  // 着地直後に地上加速で水平速度が跳ねないよう、
+  // 次の水平更新1回だけ空中速度をそのまま保存する
+  player.justLanded = false;
+
+  // =========================================================
+  // フィールド
+  // =========================================================
+
+  const ground = createBox(
+    0, -0.5, 0,
+    48, 1, 48,
+    "#56654d",
+    true
+  );
+
+  // 足場の高さは「上面」の高さで考える
+  // 厚み0.8なので centerY = topY - 0.4
+  function platform(x, topY, z, w, d, color = "#7187a6") {
+    return createBox(
+      x,
+      topY - 0.4,
+      z,
+      w,
+      0.8,
+      d,
+      color,
+      true
+    );
+  }
+
+  // =========================================================
+  // 多形状アスレチック
+  //
+  // 直方体だけにせず、
+  // 斜面 / 三角形 / 台形 / 六角形 / ダイヤ / 細い梁 /
+  // ねじれた面を順番に使う
+  // =========================================================
+
+  const coursePlatforms = [];
+
+  // 最終足場だけはゴール判定を単純にするためBoxのまま
+  let goalPlatform = platform(
+    0,
+    32.6,
+    -3.5,
+    5.5,
+    5.5,
+    "#d7b64a"
+  );
+
+  const objects = [
+    ground,
+    goalPlatform
+  ];
+
+  const meshObjects = [
+    // 1: 地面から登る幅広い斜面
+    createWedgeMesh(
+      -11.5,
+      0,
+      13.4,
+      5.2,
+      5.0,
+      2.0,
+      "#6f879c"
+    ),
+
+    // 2: 三角形
+    createTrianglePlatform(
+      -11.3,
+      2.2,
+      9.1,
+      5.2,
+      4.5,
+      0.8,
+      "#778fa8",
+      0.10
+    ),
+
+    // 3: 前後で幅が違う台形
+    createTrapezoidPlatform(
+      -8.0,
+      4.4,
+      6.6,
+      4.8,
+      2.8,
+      3.6,
+      0.8,
+      "#7295aa",
+      -0.18
+    ),
+
+    // 4: 六角形
+    createHexPlatform(
+      -4.5,
+      6.6,
+      5.0,
+      2.4,
+      2.0,
+      0.8,
+      "#6f9aa5",
+      0.12
+    ),
+
+    // 5: 細長い梁
+    createPolygonPlatform(
+      -1.0,
+      8.8,
+      6.7,
+      [
+        [-2.8, -0.65],
+        [-2.8,  0.65],
+        [ 2.8,  0.65],
+        [ 2.8, -0.65]
+      ],
+      0.65,
+      "#6e9d9b",
+      -0.38
+    ),
+
+    // 6: ダイヤ型
+    createDiamondPlatform(
+      3.1,
+      11.0,
+      4.5,
+      4.0,
+      4.0,
+      0.8,
+      "#769c8f",
+      0.15
+    ),
+
+    // 7: 高さのある短い斜面
+    createWedgeMesh(
+      5.2,
+      11.0,
+      1.0,
+      3.2,
+      4.0,
+      2.1,
+      "#849b82",
+      0.0
+    ),
+
+    // 8: 六角形の踊り場
+    createHexPlatform(
+      4.7,
+      13.4,
+      -2.5,
+      2.0,
+      2.3,
+      0.8,
+      "#90977a",
+      -0.08
+    ),
+
+    // 9: 少しねじれた四角面
+    createTwistedPlatform(
+      2.0,
+      15.2,
+      -5.7,
+      4.4,
+      3.0,
+      [
+        0.0,
+        0.25,
+        0.75,
+        0.35
+      ],
+      0.8,
+      "#9b9074",
+      0.18
+    ),
+
+    // 10: 三角形の小足場
+    createTrianglePlatform(
+      -2.0,
+      17.8,
+      -5.5,
+      4.0,
+      3.6,
+      0.8,
+      "#a1876d",
+      Math.PI
+    ),
+
+    // 11: かなり細い斜め梁
+    createPolygonPlatform(
+      -5.4,
+      20.0,
+      -2.8,
+      [
+        [-2.7, -0.55],
+        [-2.7,  0.55],
+        [ 2.7,  0.55],
+        [ 2.7, -0.55]
+      ],
+      0.65,
+      "#a67e68",
+      0.48
+    ),
+
+    // 12: 台形
+    createTrapezoidPlatform(
+      -6.4,
+      22.2,
+      1.1,
+      2.4,
+      4.6,
+      3.8,
+      0.8,
+      "#ae7664",
+      0.20
+    ),
+
+    // 13: 傾斜を含むねじれた足場
+    createTwistedPlatform(
+      -3.8,
+      24.1,
+      4.3,
+      4.2,
+      3.2,
+      [
+        0.0,
+        0.5,
+        0.9,
+        0.25
+      ],
+      0.8,
+      "#b56f61",
+      -0.15
+    ),
+
+    // 14: 六角形
+    createHexPlatform(
+      0.2,
+      26.8,
+      5.0,
+      2.3,
+      1.9,
+      0.8,
+      "#bc695d",
+      0.10
+    ),
+
+    // 15: ダイヤ型
+    createDiamondPlatform(
+      3.4,
+      29.0,
+      2.4,
+      3.4,
+      4.2,
+      0.8,
+      "#c46458",
+      -0.18
+    ),
+
+    // 16: 最後の小さな三角足場
+    createTrianglePlatform(
+      2.6,
+      31.0,
+      -0.8,
+      3.6,
+      3.2,
+      0.8,
+      "#cb6652",
+      0.15
+    ),
+
+    // コース外の造形物
+    createTriMesh(
+      10,
+      0,
+      10,
+      [
+        [-2.0, 0.0, -1.5],
+        [ 1.8, 0.0, -1.4],
+        [ 2.1, 0.0,  1.5],
+        [-1.6, 0.0,  1.8],
+        [-0.7, 2.2, -0.5],
+        [ 0.9, 1.5,  0.6]
+      ],
+      [
+        [0, 2, 1],
+        [0, 3, 2],
+        [0, 1, 4],
+        [1, 5, 4],
+        [1, 2, 5],
+        [2, 3, 5],
+        [3, 4, 5],
+        [3, 0, 4]
+      ],
+      "#806c82",
+      true,
+      -0.35
+    )
+  ];
+
+  // =========================================================
+  // 分岐ルート
+  //
+  // 本線と同じくらいの高度に複数の足場を配置して
+  // 「どの足場を経由するか」を選べるようにする
+  // =========================================================
+
+  const branchMeshObjects = [
+    // -------------------------------------------------------
+    // 高度 4～9
+    // -------------------------------------------------------
+
+    createTrianglePlatform(
+      -11.5,
+      4.6,
+      3.8,
+      4.4,
+      4.0,
+      0.8,
+      "#687f9e",
+      -0.25
+    ),
+
+    createHexPlatform(
+      -8.0,
+      6.6,
+      1.5,
+      2.2,
+      1.8,
+      0.8,
+      "#648b9e",
+      0.15
+    ),
+
+    createDiamondPlatform(
+      -4.1,
+      8.6,
+      1.8,
+      3.8,
+      3.1,
+      0.8,
+      "#64959a",
+      -0.10
+    ),
+
+    // 本線の梁と並走する横長足場
+    createTrapezoidPlatform(
+      -0.3,
+      8.9,
+      2.0,
+      2.0,
+      4.2,
+      4.8,
+      0.75,
+      "#699b91",
+      Math.PI / 2
+    ),
+
+    // -------------------------------------------------------
+    // 高度 11～16
+    // -------------------------------------------------------
+
+    createHexPlatform(
+      7.4,
+      11.1,
+      5.0,
+      2.1,
+      2.0,
+      0.8,
+      "#769a83",
+      0.0
+    ),
+
+    createTrianglePlatform(
+      9.2,
+      13.2,
+      1.8,
+      4.2,
+      4.0,
+      0.8,
+      "#849979",
+      Math.PI * 0.55
+    ),
+
+    createTwistedPlatform(
+      7.4,
+      15.3,
+      -2.2,
+      4.0,
+      3.2,
+      [
+        0.2,
+        0.0,
+        0.55,
+        0.8
+      ],
+      0.8,
+      "#92936f",
+      -0.25
+    ),
+
+    createDiamondPlatform(
+      4.1,
+      15.5,
+      -6.7,
+      3.5,
+      3.5,
+      0.8,
+      "#9b8c6c",
+      0.10
+    ),
+
+    // -------------------------------------------------------
+    // 高度 17～22
+    // -------------------------------------------------------
+
+    createTrapezoidPlatform(
+      -1.5,
+      18.0,
+      -9.0,
+      4.8,
+      2.5,
+      3.4,
+      0.8,
+      "#a18468",
+      -0.18
+    ),
+
+    createHexPlatform(
+      -6.2,
+      18.2,
+      -8.1,
+      2.0,
+      1.8,
+      0.8,
+      "#a67f65",
+      0.1
+    ),
+
+    createPolygonPlatform(
+      -9.4,
+      20.2,
+      -5.5,
+      [
+        [-2.3, -0.65],
+        [-2.3,  0.65],
+        [ 2.3,  0.65],
+        [ 2.3, -0.65]
+      ],
+      0.65,
+      "#ab7a64",
+      0.55
+    ),
+
+    createTrianglePlatform(
+      -10.0,
+      22.3,
+      -0.8,
+      4.0,
+      3.8,
+      0.8,
+      "#af7561",
+      -0.05
+    ),
+
+    // -------------------------------------------------------
+    // 高度 24～29
+    // -------------------------------------------------------
+
+    createDiamondPlatform(
+      -7.3,
+      24.3,
+      5.4,
+      3.5,
+      4.0,
+      0.8,
+      "#b66e5f",
+      0.18
+    ),
+
+    createHexPlatform(
+      -3.0,
+      26.6,
+      8.2,
+      2.2,
+      1.9,
+      0.8,
+      "#bb695c",
+      0.0
+    ),
+
+    createTrianglePlatform(
+      2.0,
+      27.0,
+      8.2,
+      4.2,
+      3.4,
+      0.8,
+      "#be655a",
+      -0.15
+    ),
+
+    createTwistedPlatform(
+      6.0,
+      28.9,
+      5.3,
+      4.0,
+      3.1,
+      [
+        0.0,
+        0.6,
+        0.35,
+        0.85
+      ],
+      0.8,
+      "#c36257",
+      0.3
+    ),
+
+    createDiamondPlatform(
+      6.7,
+      30.7,
+      0.8,
+      3.5,
+      3.5,
+      0.8,
+      "#c86753",
+      0.0
+    )
+  ];
+
+  meshObjects.push(
+    ...branchMeshObjects
+  );
+
+  // =========================================================
+  // 動的足場
+  //
+  // 動的足場は安定した移動・接地を優先してBoxとして扱う
+  // 見た目と当たり判定は同じ直方体
+  // =========================================================
+
+  function createDynamicPlatform(
+    x,
+    topY,
+    z,
+    w,
+    d,
+    color
+  ) {
+    const box =
+      createBox(
+        x,
+        topY - 0.3,
+        z,
+        w,
+        0.6,
+        d,
+        color,
+        true
+      );
+
+    box.visible = true;
+
+    box.startX = box.x;
+    box.startY = box.y;
+    box.startZ = box.z;
+
+    return box;
+  }
+
+  function createLiftPlatform(
+    x,
+    topY,
+    z,
+    w,
+    d,
+    color,
+    axis,
+    range,
+    speed,
+    startOffset = 0
+  ) {
+    const box =
+      createDynamicPlatform(
+        x,
+        topY,
+        z,
+        w,
+        d,
+        color
+      );
+
+    box.dynamicType = "lift";
+
+    box.motionAxis = axis;
+    box.motionRange = range;
+    box.motionSpeed = speed;
+
+    box.motionOffset =
+      clamp(
+        startOffset,
+        -range,
+        range
+      );
+
+    box.initialMotionOffset =
+      box.motionOffset;
+
+    box.motionDirection = 1;
+
+    if (axis === "x") {
+      box.x =
+        box.startX +
+        box.motionOffset;
+    }
+
+    if (axis === "y") {
+      box.y =
+        box.startY +
+        box.motionOffset;
+    }
+
+    if (axis === "z") {
+      box.z =
+        box.startZ +
+        box.motionOffset;
+    }
+
+    return box;
+  }
+
+  function createFallingPlatform(
+    x,
+    topY,
+    z,
+    w,
+    d,
+    color,
+    triggerDelay = 0.7,
+    respawnDelay = 3.0
+  ) {
+    const box =
+      createDynamicPlatform(
+        x,
+        topY,
+        z,
+        w,
+        d,
+        color
+      );
+
+    box.dynamicType = "falling";
+
+    box.baseColor = color;
+    box.warningColor = "#e2a14c";
+
+    box.fallState = "idle";
+    box.fallTimer = 0;
+    box.fallVelocity = 0;
+
+    box.triggerDelay =
+      triggerDelay;
+
+    box.respawnDelay =
+      respawnDelay;
+
+    box.fallGravity = 15.0;
+    box.removeDistance = 15.0;
+
+    return box;
+  }
+
+  const dynamicPlatforms = [
+    // 高度9前後: 横移動リフト
+    createLiftPlatform(
+      2.5,
+      9.0,
+      0.0,
+      3.2,
+      3.0,
+      "#4f9aaa",
+      "x",
+      3.5,
+      2.2,
+      -2.5
+    ),
+
+    // 高度13前後: 奥行き方向のリフト
+    createLiftPlatform(
+      7.0,
+      13.3,
+      -5.3,
+      3.2,
+      3.2,
+      "#559d99",
+      "z",
+      3.2,
+      1.9,
+      2.5
+    ),
+
+    // 高度18～22: 上下リフト
+    createLiftPlatform(
+      -9.3,
+      19.8,
+      2.8,
+      3.4,
+      3.4,
+      "#739568",
+      "y",
+      2.2,
+      1.55,
+      -2.2
+    ),
+
+    // 高度27付近: 横移動リフト
+    createLiftPlatform(
+      4.2,
+      27.2,
+      -1.2,
+      3.0,
+      3.0,
+      "#8f805e",
+      "x",
+      3.0,
+      2.0,
+      2.0
+    ),
+
+    // -------------------------------------------------------
+    // 落下足場
+    // -------------------------------------------------------
+
+    createFallingPlatform(
+      1.8,
+      10.9,
+      3.8,
+      3.0,
+      3.0,
+      "#ba7655",
+      0.75,
+      2.8
+    ),
+
+    createFallingPlatform(
+      0.2,
+      16.0,
+      -8.2,
+      3.2,
+      3.0,
+      "#bd6f53",
+      0.65,
+      3.2
+    ),
+
+    createFallingPlatform(
+      -1.3,
+      23.8,
+      1.0,
+      3.0,
+      3.0,
+      "#c16c50",
+      0.60,
+      3.0
+    ),
+
+    createFallingPlatform(
+      3.8,
+      30.6,
+      -4.8,
+      2.8,
+      2.8,
+      "#c7684d",
+      0.55,
+      2.7
+    )
+  ];
+
+  objects.push(
+    ...dynamicPlatforms
+  );
+
+  // =========================================================
+  // コース全体の水平方向スプレッド
+  //
+  // 高さは変えず、X/Zだけ原点から外側へ広げる
+  // =========================================================
+
+  const HORIZONTAL_SPREAD = 1.28;
+
+  function spreadXZ(x, z) {
+    return {
+      x: x * HORIZONTAL_SPREAD,
+      z: z * HORIZONTAL_SPREAD
+    };
+  }
+
+  function applyHorizontalSpread() {
+    // プレイヤー開始地点
+    const start =
+      spreadXZ(
+        PLAYER_START.x,
+        PLAYER_START.z
+      );
+
+    PLAYER_START.x = start.x;
+    PLAYER_START.z = start.z;
+
+    player.x = PLAYER_START.x;
+    player.z = PLAYER_START.z;
+
+    // ゴール
+    const goalPos =
+      spreadXZ(
+        goalPlatform.x,
+        goalPlatform.z
+      );
+
+    goalPlatform.x = goalPos.x;
+    goalPlatform.z = goalPos.z;
+
+    // 三角ポリゴン系足場
+    for (const mesh of meshObjects) {
+      const p =
+        spreadXZ(
+          mesh.x,
+          mesh.z
+        );
+
+      mesh.x = p.x;
+      mesh.z = p.z;
+
+      // 衝突用のワールド三角形を再計算
+      rebuildMeshTriangles(mesh);
+    }
+
+    // 動的足場
+    for (const platform of dynamicPlatforms) {
+      const p =
+        spreadXZ(
+          platform.startX,
+          platform.startZ
+        );
+
+      platform.startX = p.x;
+      platform.startZ = p.z;
+
+      platform.x = p.x;
+      platform.z = p.z;
+
+      // リフトの移動量も少し広げる
+      if (
+        platform.dynamicType === "lift" &&
+        (
+          platform.motionAxis === "x" ||
+          platform.motionAxis === "z"
+        )
+      ) {
+        platform.motionRange *= 1.18;
+        platform.motionOffset *= 1.18;
+        platform.initialMotionOffset *= 1.18;
+
+        platform[
+          platform.motionAxis
+        ] +=
+          platform.motionOffset;
+      }
+    }
+  }
+
+  applyHorizontalSpread();
+
+  // =========================================================
+  // ステージシステム
+  // =========================================================
+
+
+  // =========================================================
+  // 曲面足場
+  //
+  // WebGLでは細かい三角形へ分割して曲面を近似する
+  // 衝突判定も同じ三角形を使うので、見た目と当たり判定が一致する
+  // =========================================================
+
+  function createCurvedHumpPlatform(
+    x,
+    baseY,
+    z,
+    length,
+    width,
+    rise,
+    thickness,
+    color,
+    yaw = 0,
+    segments = 12
+  ) {
+    const vertices = [];
+    const triangles = [];
+
+    // X方向へ進む丸い丘
+    // topY = sin(0..PI) で中央が最も高い
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+
+      const px =
+        -length / 2 +
+        length * t;
+
+      const topY =
+        thickness +
+        Math.sin(
+          t * Math.PI
+        ) * rise;
+
+      vertices.push(
+        [px, topY, -width / 2],
+        [px, topY,  width / 2],
+        [px, 0,    -width / 2],
+        [px, 0,     width / 2]
+      );
+    }
+
+    for (let i = 0; i < segments; i++) {
+      const a = i * 4;
+      const b = (i + 1) * 4;
+
+      // 上面
+      triangles.push(
+        [a + 0, b + 0, b + 1],
+        [a + 0, b + 1, a + 1]
+      );
+
+      // 底面
+      triangles.push(
+        [a + 2, b + 3, b + 2],
+        [a + 2, a + 3, b + 3]
+      );
+
+      // 左側面
+      triangles.push(
+        [a + 0, a + 2, b + 2],
+        [a + 0, b + 2, b + 0]
+      );
+
+      // 右側面
+      triangles.push(
+        [a + 1, b + 3, a + 3],
+        [a + 1, b + 1, b + 3]
+      );
+    }
+
+    const last =
+      segments * 4;
+
+    // 前後端
+    triangles.push(
+      [0, 3, 2],
+      [0, 1, 3],
+
+      [last + 0, last + 2, last + 3],
+      [last + 0, last + 3, last + 1]
+    );
+
+    return createTriMesh(
+      x,
+      baseY,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  function createCurvedRampPlatform(
+    x,
+    baseY,
+    z,
+    length,
+    width,
+    rise,
+    thickness,
+    color,
+    yaw = 0,
+    segments = 12
+  ) {
+    const vertices = [];
+    const triangles = [];
+
+    // 緩やかに寝て始まり、寝て終わるS字寄りの上り坂
+    // smoothstepで高さだけ曲線的に変化させる
+    for (let i = 0; i <= segments; i++) {
+      const t =
+        i / segments;
+
+      const smooth =
+        t * t *
+        (3 - 2 * t);
+
+      const px =
+        -length / 2 +
+        length * t;
+
+      const topY =
+        thickness +
+        rise * smooth;
+
+      vertices.push(
+        [px, topY, -width / 2],
+        [px, topY,  width / 2],
+        [px, 0,    -width / 2],
+        [px, 0,     width / 2]
+      );
+    }
+
+    for (let i = 0; i < segments; i++) {
+      const a = i * 4;
+      const b = (i + 1) * 4;
+
+      triangles.push(
+        // 上
+        [a + 0, b + 0, b + 1],
+        [a + 0, b + 1, a + 1],
+
+        // 下
+        [a + 2, b + 3, b + 2],
+        [a + 2, a + 3, b + 3],
+
+        // 左
+        [a + 0, a + 2, b + 2],
+        [a + 0, b + 2, b + 0],
+
+        // 右
+        [a + 1, b + 3, a + 3],
+        [a + 1, b + 1, b + 3]
+      );
+    }
+
+    const last =
+      segments * 4;
+
+    triangles.push(
+      [0, 3, 2],
+      [0, 1, 3],
+
+      [last + 0, last + 2, last + 3],
+      [last + 0, last + 3, last + 1]
+    );
+
+    return createTriMesh(
+      x,
+      baseY,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  function createArchedBridgePlatform(
+    x,
+    baseY,
+    z,
+    length,
+    width,
+    archRise,
+    thickness,
+    color,
+    yaw = 0,
+    segments = 16
+  ) {
+    const vertices = [];
+    const triangles = [];
+
+    // 中央が丸く持ち上がる橋
+    // 丘型より細長くして「橋」として使う
+    for (let i = 0; i <= segments; i++) {
+      const t =
+        i / segments;
+
+      const px =
+        -length / 2 +
+        length * t;
+
+      const curve =
+        (1 - Math.cos(
+          t * Math.PI * 2
+        )) * 0.5;
+
+      const topY =
+        thickness +
+        archRise * curve;
+
+      const bottomY =
+        Math.max(
+          0,
+          topY - thickness
+        );
+
+      vertices.push(
+        [px, topY,    -width / 2],
+        [px, topY,     width / 2],
+        [px, bottomY, -width / 2],
+        [px, bottomY,  width / 2]
+      );
+    }
+
+    for (let i = 0; i < segments; i++) {
+      const a = i * 4;
+      const b = (i + 1) * 4;
+
+      triangles.push(
+        [a + 0, b + 0, b + 1],
+        [a + 0, b + 1, a + 1],
+
+        [a + 2, b + 3, b + 2],
+        [a + 2, a + 3, b + 3],
+
+        [a + 0, a + 2, b + 2],
+        [a + 0, b + 2, b + 0],
+
+        [a + 1, b + 3, a + 3],
+        [a + 1, b + 1, b + 3]
+      );
+    }
+
+    const last =
+      segments * 4;
+
+    triangles.push(
+      [0, 3, 2],
+      [0, 1, 3],
+
+      [last + 0, last + 2, last + 3],
+      [last + 0, last + 3, last + 1]
+    );
+
+    return createTriMesh(
+      x,
+      baseY,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  const curvedTestPlatforms = [
+    // 低高度帯 : 丸い丘
+    createCurvedHumpPlatform(
+      -17.5,
+      2.0,
+      6.0,
+      8.0,
+      4.2,
+      1.7,
+      0.7,
+      "#668fa4",
+      0.30,
+      14
+    ),
+
+    // 中高度帯 : 緩い曲線坂
+    createCurvedRampPlatform(
+      9.0,
+      10.6,
+      6.0,
+      8.5,
+      3.8,
+      2.4,
+      0.75,
+      "#719b82",
+      -0.55,
+      14
+    ),
+
+    // 中高度帯 : アーチ橋
+    createArchedBridgePlatform(
+      9.0,
+      16.2,
+      -9.0,
+      10.5,
+      2.8,
+      1.5,
+      0.65,
+      "#9d886b",
+      0.22,
+      18
+    ),
+
+    // 高高度帯 : 横向きの丸い丘
+    createCurvedHumpPlatform(
+      -10.0,
+      22.8,
+      8.0,
+      8.5,
+      3.6,
+      1.5,
+      0.7,
+      "#b36f61",
+      Math.PI / 2.4,
+      14
+    ),
+
+    // 最終高度帯 : なだらかな上り
+    createCurvedRampPlatform(
+      8.0,
+      27.8,
+      -7.0,
+      9.0,
+      3.2,
+      2.3,
+      0.7,
+      "#c16b57",
+      -Math.PI / 2.8,
+      16
+    )
+  ];
+
+  meshObjects.push(
+    ...curvedTestPlatforms
+  );
+
+  const testStageData = {
+    id: "test",
+    name: "テストステージ",
+    description:
+      "テストステージ : 曲面足場を含む高さ方向の複数ルートアスレチック",
+    start: {
+      x: PLAYER_START.x,
+      y: PLAYER_START.y,
+      z: PLAYER_START.z,
+      angle: PLAYER_START.angle
+    },
+    goal: goalPlatform,
+    objects: objects.slice(),
+    meshes: meshObjects.slice(),
+    dynamics: dynamicPlatforms.slice(),
+    showGrid: true,
+    cameraAngle: 0
+  };
+
+  // ---------------------------------------------------------
+  // 水平アスレチック
+  //
+  // 高さは0～6程度
+  // 東西方向へ長く進み、高架・低地・脇道が途中で交差する
+  // ---------------------------------------------------------
+
+  const horizontalGround =
+    createBox(
+      0,
+      -3.0,
+      0,
+      148,
+      1,
+      88,
+      "#48564a",
+      true
+    );
+
+  const horizontalStartDeck =
+    platform(
+      -60,
+      0,
+      18,
+      14,
+      12,
+      "#66788d"
+    );
+
+  const horizontalGoal =
+    platform(
+      60,
+      4.5,
+      -18,
+      9,
+      9,
+      "#d7b64a"
+    );
+
+  const horizontalStaticObjects = [
+    horizontalGround,
+    horizontalStartDeck,
+    horizontalGoal,
+
+    // 落ちても復帰ルートを作りやすい低地の島
+    platform(
+      -18,
+      -0.4,
+      30,
+      11,
+      8,
+      "#586b61"
+    ),
+
+    platform(
+      20,
+      -0.3,
+      28,
+      12,
+      8,
+      "#586b61"
+    ),
+
+    platform(
+      48,
+      3.7,
+      -13,
+      10,
+      9,
+      "#9c7c61"
+    )
+  ];
+
+  const horizontalMeshes = [
+    // ----------------------
+    // スタート～分岐
+    // ----------------------
+
+    createTrapezoidPlatform(
+      -51,
+      0.7,
+      16,
+      7.5,
+      5.0,
+      7.0,
+      0.8,
+      "#6b8497",
+      -0.08
+    ),
+
+    createHexPlatform(
+      -43,
+      1.4,
+      13,
+      3.6,
+      3.0,
+      0.8,
+      "#6b8f9e",
+      0.08
+    ),
+
+    // ----------------------
+    // 高架ルート
+    // ----------------------
+
+    createWedgeMesh(
+      -35,
+      1.2,
+      9,
+      7.0,
+      7.0,
+      2.4,
+      "#6c989c",
+      -Math.PI / 2
+    ),
+
+    createPolygonPlatform(
+      -26,
+      3.7,
+      6,
+      [
+        [-4.6, -0.8],
+        [-4.6,  0.8],
+        [ 4.6,  0.8],
+        [ 4.6, -0.8]
+      ],
+      0.7,
+      "#709b92",
+      -0.05
+    ),
+
+    createTwistedPlatform(
+      -16,
+      4.0,
+      5,
+      7.0,
+      5.0,
+      [
+        0.0,
+        0.35,
+        0.8,
+        0.25
+      ],
+      0.8,
+      "#789886",
+      0.05
+    ),
+
+    createPolygonPlatform(
+      -5,
+      4.7,
+      4,
+      [
+        [-6.0, -1.2],
+        [-6.0,  1.2],
+        [ 6.0,  1.2],
+        [ 6.0, -1.2]
+      ],
+      0.75,
+      "#87947a",
+      0.0
+    ),
+
+    createDiamondPlatform(
+      7,
+      4.8,
+      2,
+      6.0,
+      5.2,
+      0.8,
+      "#92906f",
+      0.1
+    ),
+
+    createWedgeMesh(
+      17,
+      1.8,
+      -1,
+      7.5,
+      8.0,
+      2.8,
+      "#9d886a",
+      Math.PI / 2
+    ),
+
+    createHexPlatform(
+      26,
+      2.6,
+      -5,
+      3.7,
+      3.2,
+      0.8,
+      "#a68365",
+      0.1
+    ),
+
+    createTrapezoidPlatform(
+      36,
+      3.2,
+      -9,
+      7.0,
+      4.0,
+      6.0,
+      0.8,
+      "#ae795f",
+      -0.12
+    ),
+
+    // ----------------------
+    // 南側の低地ルート
+    // ----------------------
+
+    createTrianglePlatform(
+      -49,
+      0.4,
+      27,
+      7.0,
+      6.0,
+      0.8,
+      "#687f91",
+      Math.PI
+    ),
+
+    createPolygonPlatform(
+      -39,
+      0.8,
+      27,
+      [
+        [-4.5, -0.9],
+        [-4.5,  0.9],
+        [ 4.5,  0.9],
+        [ 4.5, -0.9]
+      ],
+      0.7,
+      "#667f89",
+      0.08
+    ),
+
+    createHexPlatform(
+      -29,
+      1.1,
+      24,
+      3.5,
+      3.0,
+      0.8,
+      "#6d8888",
+      0.0
+    ),
+
+    createDiamondPlatform(
+      -17,
+      1.2,
+      21,
+      5.0,
+      5.0,
+      0.8,
+      "#718c82",
+      0.15
+    ),
+
+    createTrapezoidPlatform(
+      -4,
+      1.0,
+      20,
+      6.5,
+      4.0,
+      6.0,
+      0.8,
+      "#7a8c78",
+      0.0
+    ),
+
+    createTrianglePlatform(
+      11,
+      1.4,
+      18,
+      7.0,
+      6.5,
+      0.8,
+      "#888a6f",
+      -Math.PI / 2
+    ),
+
+    createTwistedPlatform(
+      24,
+      2.0,
+      13,
+      7.0,
+      5.5,
+      [
+        0.2,
+        0.0,
+        0.7,
+        0.45
+      ],
+      0.8,
+      "#958269",
+      -0.12
+    ),
+
+    createPolygonPlatform(
+      35,
+      2.8,
+      5,
+      [
+        [-5.0, -0.85],
+        [-5.0,  0.85],
+        [ 5.0,  0.85],
+        [ 5.0, -0.85]
+      ],
+      0.7,
+      "#a07962",
+      -0.18
+    ),
+
+    // ----------------------
+    // 中央の細い脇道
+    // ----------------------
+
+    createDiamondPlatform(
+      -33,
+      2.2,
+      -3,
+      4.5,
+      4.5,
+      0.8,
+      "#728d98",
+      0.0
+    ),
+
+    createPolygonPlatform(
+      -22,
+      2.4,
+      -4,
+      [
+        [-4.5, -0.65],
+        [-4.5,  0.65],
+        [ 4.5,  0.65],
+        [ 4.5, -0.65]
+      ],
+      0.65,
+      "#778f90",
+      0.15
+    ),
+
+    createHexPlatform(
+      -11,
+      2.7,
+      -5,
+      3.2,
+      2.8,
+      0.8,
+      "#818c84",
+      0.0
+    ),
+
+    createTrianglePlatform(
+      1,
+      3.1,
+      -5,
+      6.0,
+      5.5,
+      0.8,
+      "#8b8878",
+      Math.PI / 2
+    ),
+
+    createDiamondPlatform(
+      13,
+      3.2,
+      -8,
+      5.0,
+      5.0,
+      0.8,
+      "#96816e",
+      0.1
+    ),
+
+    createHexPlatform(
+      24,
+      3.2,
+      -12,
+      3.2,
+      2.8,
+      0.8,
+      "#a07965",
+      0.0
+    ),
+
+    createTrapezoidPlatform(
+      36,
+      3.5,
+      -15,
+      6.5,
+      4.0,
+      5.5,
+      0.8,
+      "#aa725d",
+      -0.08
+    )
+  ];
+
+  const horizontalDynamics = [
+    // 南北ルートを結ぶリフト
+    createLiftPlatform(
+      -10,
+      1.4,
+      13,
+      4.0,
+      4.0,
+      "#4f9aaa",
+      "z",
+      7.0,
+      2.4,
+      -6.0
+    ),
+
+    // 低地から高架へ
+    createLiftPlatform(
+      4,
+      1.2,
+      11,
+      4.2,
+      4.2,
+      "#559d99",
+      "y",
+      2.8,
+      1.6,
+      -2.2
+    ),
+
+    // 終盤の南北リフト
+    createLiftPlatform(
+      43,
+      3.5,
+      -5,
+      4.0,
+      4.0,
+      "#739568",
+      "z",
+      6.0,
+      2.0,
+      4.0
+    ),
+
+    // 落下足場
+    createFallingPlatform(
+      5,
+      1.4,
+      20,
+      4.0,
+      4.0,
+      "#ba7655",
+      0.75,
+      2.7
+    ),
+
+    createFallingPlatform(
+      18,
+      2.1,
+      16,
+      4.0,
+      4.0,
+      "#bd6f53",
+      0.65,
+      3.0
+    ),
+
+    createFallingPlatform(
+      30,
+      3.3,
+      -14,
+      3.8,
+      3.8,
+      "#c16c50",
+      0.62,
+      2.8
+    )
+  ];
+
+  const horizontalObjects = [
+    ...horizontalStaticObjects,
+    ...horizontalDynamics
+  ];
+
+  const horizontalStageData = {
+    id: "horizontal",
+    name: "水平アスレチック",
+    description:
+      "水平アスレチック : 高架・低地・脇道を選びながら東側のゴールへ進む",
+    start: {
+      x: -60,
+      y: 0.75,
+      z: 18,
+      angle: Math.PI / 2
+    },
+    goal: horizontalGoal,
+    objects: horizontalObjects,
+    meshes: horizontalMeshes,
+    dynamics: horizontalDynamics,
+    showGrid: false,
+    cameraAngle: -Math.PI / 2
+  };
+
+
+  // =========================================================
+  // 曲面フィールド
+  //
+  // 1枚の大きな高さフィールドを閉じた三角メッシュとして生成
+  // 見た目と当たり判定は同じポリゴンを使用
+  // =========================================================
+
+  function fieldSmooth(t) {
+    const v = clamp(t, 0, 1);
+    return v * v * (3 - 2 * v);
+  }
+
+  function fieldGaussian(
+    x, z,
+    cx, cz,
+    sx, sz
+  ) {
+    const dx = (x - cx) / sx;
+    const dz = (z - cz) / sz;
+
+    return Math.exp(
+      -0.5 * (
+        dx * dx +
+        dz * dz
+      )
+    );
+  }
+
+  function curvedFieldHeight(x, z) {
+    // 全体の細かなうねり
+    let h =
+      0.9 +
+      Math.sin((x + 48) * 0.10) * 0.42 +
+      Math.cos(z * 0.14) * 0.34;
+
+    // 前半の大きな丘
+    h +=
+      4.9 *
+      fieldGaussian(
+        x, z,
+        -27, 8,
+        15, 13
+      );
+
+    // 丘と丘の間の鞍部
+    h -=
+      2.2 *
+      fieldGaussian(
+        x, z,
+        -14, -5,
+        12, 10
+      );
+
+    // 南側の別ルートになる高まり
+    h +=
+      3.15 *
+      fieldGaussian(
+        x, z,
+        -17, 20,
+        15, 10
+      );
+
+    // -------------------------------------------------------
+    // 中央の曲がった谷
+    // 中心線が低く、左右がなだらかにせり上がる
+    // -------------------------------------------------------
+
+    const channelWindow =
+      fieldSmooth(
+        (x + 10) / 10
+      ) *
+      (
+        1 -
+        fieldSmooth(
+          (x - 27) / 9
+        )
+      );
+
+    const channelCenterZ =
+      -3 +
+      Math.sin(
+        (x + 8) * 0.10
+      ) * 6.5;
+
+    const channelSides =
+      1 -
+      Math.exp(
+        -Math.pow(
+          (z - channelCenterZ) / 9,
+          2
+        )
+      );
+
+    h +=
+      channelWindow *
+      channelSides *
+      2.85;
+
+    h +=
+      channelWindow *
+      Math.sin(
+        (x + 4) * 0.18
+      ) * 0.62;
+
+    // -------------------------------------------------------
+    // 中盤のすり鉢状地形
+    // 外周が高く、中央が窪む
+    // -------------------------------------------------------
+
+    h +=
+      fieldGaussian(
+        x, z,
+        16, -12,
+        16, 14
+      ) * 4.0;
+
+    h -=
+      fieldGaussian(
+        x, z,
+        16, -12,
+        7.0, 7.0
+      ) * 5.2;
+
+    // -------------------------------------------------------
+    // 局所的な極端地形
+    //
+    // フィールド全体の滑らかさは維持しつつ、
+    // 一部だけ急に深い溝・鋭いこぶ・クレーター状にする
+    // -------------------------------------------------------
+
+    // 斜めに走る細い深溝
+    const trenchLine =
+      x + 5 -
+      (z - 9) * 0.42;
+
+    const trenchLength =
+      fieldGaussian(
+        x, z,
+        -4, 10,
+        11, 14
+      );
+
+    h -=
+      Math.exp(
+        -Math.pow(
+          trenchLine / 2.4,
+          2
+        )
+      ) *
+      trenchLength *
+      4.6;
+
+    // 円錐に近い鋭いこぶ
+    h +=
+      fieldGaussian(
+        x, z,
+        8, 13,
+        3.6, 3.6
+      ) * 5.5;
+
+    // 小さなクレーター
+    h +=
+      fieldGaussian(
+        x, z,
+        -31, -15,
+        7.5, 7.5
+      ) * 2.7;
+
+    h -=
+      fieldGaussian(
+        x, z,
+        -31, -15,
+        3.4, 3.4
+      ) * 5.0;
+
+    // 終盤手前の短い盛り上がり
+    h +=
+      fieldGaussian(
+        x, z,
+        28, -20,
+        4.5, 3.3
+      ) * 4.2;
+
+    // 終盤の尾根
+    h +=
+      fieldGaussian(
+        x, z,
+        30, 2,
+        14, 9
+      ) * 3.1;
+
+    h +=
+      fieldGaussian(
+        x, z,
+        30, 18,
+        21, 7.5
+      ) * 2.35;
+
+    // ゴール側の大きな丘
+    h +=
+      fieldGaussian(
+        x, z,
+        42, -15,
+        14, 13
+      ) * 5.6;
+
+    // スタート周辺を少し平坦化
+    const startDistance =
+      Math.hypot(
+        (x + 45) / 9,
+        (z - 14) / 8
+      );
+
+    const startBlend =
+      fieldSmooth(
+        1 - startDistance
+      );
+
+    h =
+      h * (1 - startBlend * 0.92) +
+      1.15 * startBlend * 0.92;
+
+    // ゴール頂上を少し平坦化
+    const goalDistance =
+      Math.hypot(
+        (x - 44) / 8,
+        (z + 15) / 7
+      );
+
+    const goalBlend =
+      fieldSmooth(
+        1 - goalDistance
+      );
+
+    h =
+      h * (1 - goalBlend * 0.86) +
+      7.4 * goalBlend * 0.86;
+
+    return clamp(
+      h,
+      -2.4,
+      10.2
+    );
+  }
+
+  function createCurvedFieldTerrain(
+    width,
+    depth,
+    segmentsX,
+    segmentsZ,
+    bottomY,
+    color
+  ) {
+    const vertices = [];
+    const triangles = [];
+
+    const cols =
+      segmentsX + 1;
+
+    function index(ix, iz) {
+      return iz * cols + ix;
+    }
+
+    // 上面頂点
+    for (
+      let iz = 0;
+      iz <= segmentsZ;
+      iz++
+    ) {
+      const z =
+        -depth / 2 +
+        depth *
+        (iz / segmentsZ);
+
+      for (
+        let ix = 0;
+        ix <= segmentsX;
+        ix++
+      ) {
+        const x =
+          -width / 2 +
+          width *
+          (ix / segmentsX);
+
+        vertices.push([
+          x,
+          curvedFieldHeight(
+            x,
+            z
+          ),
+          z
+        ]);
+      }
+    }
+
+    const bottomOffset =
+      vertices.length;
+
+    // 底面頂点
+    for (
+      let iz = 0;
+      iz <= segmentsZ;
+      iz++
+    ) {
+      const z =
+        -depth / 2 +
+        depth *
+        (iz / segmentsZ);
+
+      for (
+        let ix = 0;
+        ix <= segmentsX;
+        ix++
+      ) {
+        const x =
+          -width / 2 +
+          width *
+          (ix / segmentsX);
+
+        vertices.push([
+          x,
+          bottomY,
+          z
+        ]);
+      }
+    }
+
+    // 上面 +Y / 底面 -Y
+    for (
+      let iz = 0;
+      iz < segmentsZ;
+      iz++
+    ) {
+      for (
+        let ix = 0;
+        ix < segmentsX;
+        ix++
+      ) {
+        const i00 =
+          index(ix, iz);
+
+        const i10 =
+          index(ix + 1, iz);
+
+        const i01 =
+          index(ix, iz + 1);
+
+        const i11 =
+          index(ix + 1, iz + 1);
+
+        triangles.push(
+          [i00, i11, i10],
+          [i00, i01, i11]
+        );
+
+        const b00 =
+          bottomOffset + i00;
+
+        const b10 =
+          bottomOffset + i10;
+
+        const b01 =
+          bottomOffset + i01;
+
+        const b11 =
+          bottomOffset + i11;
+
+        triangles.push(
+          [b00, b10, b11],
+          [b00, b11, b01]
+        );
+      }
+    }
+
+    // 北側 -Z
+    for (
+      let ix = 0;
+      ix < segmentsX;
+      ix++
+    ) {
+      const a =
+        index(ix, 0);
+
+      const b =
+        index(ix + 1, 0);
+
+      const ba =
+        bottomOffset + a;
+
+      const bb =
+        bottomOffset + b;
+
+      triangles.push(
+        [a, bb, ba],
+        [a, b, bb]
+      );
+    }
+
+    // 南側 +Z
+    for (
+      let ix = 0;
+      ix < segmentsX;
+      ix++
+    ) {
+      const a =
+        index(ix, segmentsZ);
+
+      const b =
+        index(ix + 1, segmentsZ);
+
+      const ba =
+        bottomOffset + a;
+
+      const bb =
+        bottomOffset + b;
+
+      triangles.push(
+        [a, ba, bb],
+        [a, bb, b]
+      );
+    }
+
+    // 西側 -X
+    for (
+      let iz = 0;
+      iz < segmentsZ;
+      iz++
+    ) {
+      const a =
+        index(0, iz);
+
+      const b =
+        index(0, iz + 1);
+
+      const ba =
+        bottomOffset + a;
+
+      const bb =
+        bottomOffset + b;
+
+      triangles.push(
+        [a, ba, bb],
+        [a, bb, b]
+      );
+    }
+
+    // 東側 +X
+    for (
+      let iz = 0;
+      iz < segmentsZ;
+      iz++
+    ) {
+      const a =
+        index(segmentsX, iz);
+
+      const b =
+        index(
+          segmentsX,
+          iz + 1
+        );
+
+      const ba =
+        bottomOffset + a;
+
+      const bb =
+        bottomOffset + b;
+
+      triangles.push(
+        [a, bb, ba],
+        [a, b, bb]
+      );
+    }
+
+    const terrain =
+      createTriMesh(
+        0, 0, 0,
+        vertices,
+        triangles,
+        color,
+        true
+      );
+
+    // 凹地があるため中心基準の法線補正は使わない
+    terrain.preserveWinding =
+      true;
+
+    rebuildMeshTriangles(
+      terrain
+    );
+
+    return terrain;
+  }
+
+  const curvedFieldTerrain =
+    createCurvedFieldTerrain(
+      104,
+      68,
+      30,
+      20,
+      -4.5,
+      "#71836c"
+    );
+
+  const curvedFieldStartX =
+    -45;
+
+  const curvedFieldStartZ =
+    14;
+
+  const curvedFieldGoalX =
+    44;
+
+  const curvedFieldGoalZ =
+    -15;
+
+  const curvedFieldGoalY =
+    curvedFieldHeight(
+      curvedFieldGoalX,
+      curvedFieldGoalZ
+    );
+
+  function getMeshTopYAtXZ(
+    mesh,
+    x,
+    z
+  ) {
+    let bestY =
+      -Infinity;
+
+    for (
+      const triangle
+      of mesh.worldTriangles
+    ) {
+      if (
+        triangle.normal.y <= 0.48
+      ) {
+        continue;
+      }
+
+      if (
+        !pointInTriangleXZ(
+          x,
+          z,
+          triangle
+        )
+      ) {
+        continue;
+      }
+
+      const y =
+        triangleYAtXZ(
+          triangle,
+          x,
+          z
+        );
+
+      if (
+        y !== null
+      ) {
+        bestY =
+          Math.max(
+            bestY,
+            y
+          );
+      }
+    }
+
+    return Number.isFinite(
+      bestY
+    )
+      ? bestY
+      : null;
+  }
+
+  function createHexPrismMesh(
+    x,
+    y,
+    z,
+    radius,
+    height,
+    color,
+    yaw = 0
+  ) {
+    const vertices = [];
+    const triangles = [];
+    const sides = 6;
+
+    for (
+      let i = 0;
+      i < sides;
+      i++
+    ) {
+      const a =
+        Math.PI * 2 *
+        i / sides;
+
+      vertices.push([
+        Math.cos(a) * radius,
+        0,
+        Math.sin(a) * radius
+      ]);
+    }
+
+    for (
+      let i = 0;
+      i < sides;
+      i++
+    ) {
+      const a =
+        Math.PI * 2 *
+        i / sides;
+
+      vertices.push([
+        Math.cos(a) * radius,
+        height,
+        Math.sin(a) * radius
+      ]);
+    }
+
+    // 底面・天面
+    for (
+      let i = 1;
+      i < sides - 1;
+      i++
+    ) {
+      triangles.push(
+        [0, i + 1, i],
+        [sides, sides + i, sides + i + 1]
+      );
+    }
+
+    // 側面
+    for (
+      let i = 0;
+      i < sides;
+      i++
+    ) {
+      const n =
+        (i + 1) % sides;
+
+      triangles.push(
+        [i, n, sides + n],
+        [i, sides + n, sides + i]
+      );
+    }
+
+    return createTriMesh(
+      x,
+      y,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  function createConeMesh(
+    x,
+    y,
+    z,
+    radius,
+    height,
+    color,
+    yaw = 0,
+    sides = 8
+  ) {
+    const vertices = [];
+    const triangles = [];
+
+    for (
+      let i = 0;
+      i < sides;
+      i++
+    ) {
+      const a =
+        Math.PI * 2 *
+        i / sides;
+
+      vertices.push([
+        Math.cos(a) * radius,
+        0,
+        Math.sin(a) * radius
+      ]);
+    }
+
+    const apex =
+      vertices.length;
+
+    vertices.push([
+      0,
+      height,
+      0
+    ]);
+
+    // 底面
+    for (
+      let i = 1;
+      i < sides - 1;
+      i++
+    ) {
+      triangles.push(
+        [0, i + 1, i]
+      );
+    }
+
+    // 側面
+    for (
+      let i = 0;
+      i < sides;
+      i++
+    ) {
+      const n =
+        (i + 1) % sides;
+
+      triangles.push(
+        [i, n, apex]
+      );
+    }
+
+    return createTriMesh(
+      x,
+      y,
+      z,
+      vertices,
+      triangles,
+      color,
+      true,
+      yaw
+    );
+  }
+
+  function createLowPolyTree(
+    x,
+    z,
+    scale = 1,
+    yaw = 0
+  ) {
+    const groundY =
+      getMeshTopYAtXZ(
+        curvedFieldTerrain,
+        x,
+        z
+      ) ??
+      curvedFieldHeight(
+        x,
+        z
+      );
+
+    const trunkHeight =
+      2.4 * scale;
+
+    const trunk =
+      createHexPrismMesh(
+        x,
+        groundY,
+        z,
+        0.42 * scale,
+        trunkHeight,
+        "#66513c",
+        yaw
+      );
+
+    const crown =
+      createConeMesh(
+        x,
+        groundY +
+        trunkHeight * 0.62,
+        z,
+        1.8 * scale,
+        3.4 * scale,
+        "#49694e",
+        yaw + 0.17,
+        8
+      );
+
+    return [
+      trunk,
+      crown
+    ];
+  }
+
+  function createBoulderMesh(
+    x,
+    z,
+    scale = 1,
+    yaw = 0
+  ) {
+    const groundY =
+      getMeshTopYAtXZ(
+        curvedFieldTerrain,
+        x,
+        z
+      ) ??
+      curvedFieldHeight(
+        x,
+        z
+      );
+
+    const vertices = [
+      [-1.45, 0.10, -0.75],
+      [-0.55, 0.00, -1.45],
+      [ 0.85, 0.12, -1.20],
+      [ 1.50, 0.05, -0.20],
+      [ 1.10, 0.08,  1.10],
+      [-0.10, 0.00,  1.45],
+      [-1.30, 0.06,  0.90],
+
+      [-0.85, 1.10, -0.55],
+      [ 0.15, 1.55, -0.85],
+      [ 1.00, 1.10, -0.15],
+      [ 0.65, 1.35,  0.75],
+      [-0.45, 1.65,  0.60]
+    ].map(
+      ([vx, vy, vz]) => [
+        vx * scale,
+        vy * scale,
+        vz * scale
+      ]
+    );
+
+    const triangles = [
+      // 底
+      [0, 2, 1],
+      [0, 3, 2],
+      [0, 4, 3],
+      [0, 5, 4],
+      [0, 6, 5],
+
+      // 側面下段
+      [0, 1, 7],
+      [1, 2, 8],
+      [1, 8, 7],
+      [2, 3, 9],
+      [2, 9, 8],
+      [3, 4, 10],
+      [3, 10, 9],
+      [4, 5, 11],
+      [4, 11, 10],
+      [5, 6, 11],
+      [6, 0, 7],
+      [6, 7, 11],
+
+      // 上面
+      [7, 8, 11],
+      [8, 9, 10],
+      [8, 10, 11]
+    ];
+
+    return createTriMesh(
+      x,
+      groundY - 0.05,
+      z,
+      vertices,
+      triangles,
+      "#6f716d",
+      true,
+      yaw
+    );
+  }
+
+  const curvedFieldDecorMeshes = [];
+
+  const treePlacements = [
+    [-38,  6, 1.10, 0.2],
+    [-30, 20, 1.25, 0.8],
+    [-21, 15, 0.95, 0.1],
+    [ -8,-18, 1.15, 0.5],
+    [ 13, 24, 1.10, 0.9],
+    [ 25, 17, 1.30, 0.3],
+    [ 36,  7, 1.05, 0.7],
+    [ 39,-26, 1.20, 0.4]
+  ];
+
+  for (
+    const [
+      x,
+      z,
+      scale,
+      yaw
+    ]
+    of treePlacements
+  ) {
+    curvedFieldDecorMeshes.push(
+      ...createLowPolyTree(
+        x,
+        z,
+        scale,
+        yaw
+      )
+    );
+  }
+
+  const boulderPlacements = [
+    [-35,-11, 1.35, 0.3],
+    [-20, -7, 1.10, 1.0],
+    [ -1, 15, 1.45, 0.4],
+    [ 11, -6, 1.25, 0.7],
+    [ 22,-21, 1.55, 0.2],
+    [ 32, -4, 1.30, 0.9],
+    [ 45,  9, 1.15, 0.5]
+  ];
+
+  for (
+    const [
+      x,
+      z,
+      scale,
+      yaw
+    ]
+    of boulderPlacements
+  ) {
+    curvedFieldDecorMeshes.push(
+      createBoulderMesh(
+        x,
+        z,
+        scale,
+        yaw
+      )
+    );
+  }
+
+  const curvedFieldActualGoalY =
+    getMeshTopYAtXZ(
+      curvedFieldTerrain,
+      curvedFieldGoalX,
+      curvedFieldGoalZ
+    ) ??
+    curvedFieldGoalY;
+
+  // ゴール位置を視認しやすくする薄い金色パッド
+  const curvedFieldGoal =
+    platform(
+      curvedFieldGoalX,
+      curvedFieldActualGoalY + 0.22,
+      curvedFieldGoalZ,
+      6.5,
+      6.5,
+      "#d7b64a"
+    );
+
+  const curvedFieldStageData = {
+    id: "curvedField",
+    name: "曲面フィールド",
+    description:
+      "曲面フィールド : 木や大岩のある連続地形を、深い溝・鋭いこぶ・クレーターを越えて進む",
+    start: {
+      x: curvedFieldStartX,
+      y:
+        curvedFieldHeight(
+          curvedFieldStartX,
+          curvedFieldStartZ
+        ) +
+        player.h / 2 +
+        0.02,
+      z: curvedFieldStartZ,
+      angle: Math.PI / 2
+    },
+    goal: curvedFieldGoal,
+    objects: [
+      curvedFieldGoal
+    ],
+    meshes: [
+      curvedFieldTerrain,
+      ...curvedFieldDecorMeshes
+    ],
+    dynamics: [],
+    showGrid: false,
+
+    // 実際の三角地形上面へスポーン位置を合わせる
+    snapStartToSurface: true,
+
+    cameraAngle:
+      -Math.PI / 2
+  };
+
+  const STAGES = {
+    test: testStageData,
+    horizontal: horizontalStageData,
+    curvedField: curvedFieldStageData
+  };
+
+  let currentStageId = "test";
+  let currentStage =
+    STAGES[currentStageId];
+
+  function isPlayerStandingOnBox(
+    box,
+    tolerance = 0.10
+  ) {
+    if (
+      !box.solid ||
+      box.visible === false
+    ) {
+      return false;
+    }
+
+    const pb =
+      getBounds(player);
+
+    const b =
+      getBounds(box);
+
+    const horizontalOverlap =
+      pb.maxX > b.minX + 0.04 &&
+      pb.minX < b.maxX - 0.04 &&
+      pb.maxZ > b.minZ + 0.04 &&
+      pb.minZ < b.maxZ - 0.04;
+
+    const feetNearTop =
+      Math.abs(
+        pb.minY -
+        b.maxY
+      ) <= tolerance;
+
+    return (
+      horizontalOverlap &&
+      feetNearTop &&
+      player.verticalSpeed <= 0.5
+    );
+  }
+
+  function getAabbOverlap(a, b) {
+    const A = getBounds(a);
+    const B = getBounds(b);
+
+    return {
+      x:
+        Math.min(A.maxX, B.maxX) -
+        Math.max(A.minX, B.minX),
+
+      y:
+        Math.min(A.maxY, B.maxY) -
+        Math.max(A.minY, B.minY),
+
+      z:
+        Math.min(A.maxZ, B.maxZ) -
+        Math.max(A.minZ, B.minZ)
+    };
+  }
+
+  function isSideContactWithMovingPlatform(
+    platform,
+    dx,
+    dy,
+    dz
+  ) {
+    if (
+      dx === 0 &&
+      dz === 0
+    ) {
+      return false;
+    }
+
+    const overlap =
+      getAabbOverlap(
+        player,
+        platform
+      );
+
+    if (
+      overlap.x <= 0 ||
+      overlap.y <= 0 ||
+      overlap.z <= 0
+    ) {
+      return false;
+    }
+
+    const pb =
+      getBounds(player);
+
+    const b =
+      getBounds(platform);
+
+    // 上面に乗っているだけなら側面押し出しではない
+    const standingOnTop =
+      Math.abs(
+        pb.minY -
+        b.maxY
+      ) <= 0.12 &&
+      player.verticalSpeed <= 0.5;
+
+    if (standingOnTop) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function pushPlayerByMovingPlatform(
+    platform,
+    dx,
+    dy,
+    dz,
+    dt
+  ) {
+    if (
+      dx === 0 &&
+      dy === 0 &&
+      dz === 0
+    ) {
+      return;
+    }
+
+    if (
+      !isSideContactWithMovingPlatform(
+        platform,
+        dx,
+        dy,
+        dz
+      )
+    ) {
+      return;
+    }
+
+    // -------------------------------------------------------
+    // 横方向
+    //
+    // リフトが動いた方向へプレイヤーを押す
+    // 通常の moveHorizontal() を通すので、
+    // その先に別の壁があればそこで止まる
+    // -------------------------------------------------------
+
+    if (
+      dx !== 0 ||
+      dz !== 0
+    ) {
+      const oldX =
+        player.x;
+
+      const oldZ =
+        player.z;
+
+      // 押しているリフト自身だけ一時的に衝突対象から外す
+      // 他の壁・足場との衝突はそのまま有効
+      const oldSolid =
+        platform.solid;
+
+      platform.solid = false;
+
+      moveHorizontal(
+        dx,
+        dz
+      );
+
+      platform.solid =
+        oldSolid;
+
+      const movedX =
+        player.x - oldX;
+
+      const movedZ =
+        player.z - oldZ;
+
+      // リフトの実速度を少し引き継ぐ
+      const pushStrength = 0.85;
+      const safeDt =
+        Math.max(dt, 1 / 240);
+
+      if (
+        Math.abs(dx) > 0.00001 &&
+        Math.abs(movedX) > 0.00001
+      ) {
+        player.vx =
+          dx / safeDt *
+          pushStrength;
+      }
+
+      if (
+        Math.abs(dz) > 0.00001 &&
+        Math.abs(movedZ) > 0.00001
+      ) {
+        player.vz =
+          dz / safeDt *
+          pushStrength;
+      }
+    }
+
+    // -------------------------------------------------------
+    // 縦方向
+    //
+    // 上下リフトの側面に当たった場合は、
+    // 下から押し上げられるケースだけ少し持ち上げる
+    // 上から押し潰す方向は既存の縦挟み込み保護へ任せる
+    // -------------------------------------------------------
+
+    if (dy > 0) {
+      const room =
+        getVerticalRoomInfo();
+
+      const nextY =
+        player.y + dy;
+
+      if (
+        !room.hasCeiling ||
+        nextY <= room.maxCenterY
+      ) {
+        player.y =
+          nextY;
+
+        stabilizeVerticalRoom();
+      }
+    }
+  }
+
+  function moveLiftPlatform(
+    platform,
+    dt
+  ) {
+    const wasStanding =
+      isPlayerStandingOnBox(
+        platform,
+        0.13
+      );
+
+    const oldX = platform.x;
+    const oldY = platform.y;
+    const oldZ = platform.z;
+
+    let nextOffset =
+      platform.motionOffset +
+      platform.motionDirection *
+      platform.motionSpeed *
+      dt;
+
+    if (
+      nextOffset >
+      platform.motionRange
+    ) {
+      const excess =
+        nextOffset -
+        platform.motionRange;
+
+      nextOffset =
+        platform.motionRange -
+        excess;
+
+      platform.motionDirection = -1;
+    }
+
+    if (
+      nextOffset <
+      -platform.motionRange
+    ) {
+      const excess =
+        -platform.motionRange -
+        nextOffset;
+
+      nextOffset =
+        -platform.motionRange +
+        excess;
+
+      platform.motionDirection = 1;
+    }
+
+    platform.motionOffset =
+      nextOffset;
+
+    platform.x =
+      platform.startX;
+
+    platform.y =
+      platform.startY;
+
+    platform.z =
+      platform.startZ;
+
+    platform[
+      platform.motionAxis
+    ] += nextOffset;
+
+    const dx =
+      platform.x - oldX;
+
+    const dy =
+      platform.y - oldY;
+
+    const dz =
+      platform.z - oldZ;
+
+    if (wasStanding) {
+      // リフトに乗っている間はその移動量だけ運ぶ
+      if (
+        dx !== 0 ||
+        dz !== 0
+      ) {
+        moveHorizontal(
+          dx,
+          dz
+        );
+      }
+
+      if (dy !== 0) {
+        player.y += dy;
+
+        stabilizeVerticalRoom();
+
+        player.isGrounded = true;
+        player.verticalSpeed = 0;
+      }
+    } else {
+      // 上に乗っていない状態で側面へ接触したら、
+      // リフトの移動方向へ押し出す
+      pushPlayerByMovingPlatform(
+        platform,
+        dx,
+        dy,
+        dz,
+        dt
+      );
+    }
+  }
+
+  function moveFallingPlatform(
+    platform,
+    dt
+  ) {
+    const wasStanding =
+      isPlayerStandingOnBox(
+        platform,
+        0.13
+      );
+
+    const oldY =
+      platform.y;
+
+    if (
+      platform.fallState ===
+      "idle"
+    ) {
+      platform.color =
+        platform.baseColor;
+
+      if (wasStanding) {
+        platform.fallState =
+          "armed";
+
+        platform.fallTimer = 0;
+      }
+    }
+
+    if (
+      platform.fallState ===
+      "armed"
+    ) {
+      platform.fallTimer +=
+        dt;
+
+      platform.color =
+        platform.warningColor;
+
+      if (
+        platform.fallTimer >=
+        platform.triggerDelay
+      ) {
+        platform.fallState =
+          "falling";
+
+        platform.fallTimer = 0;
+        platform.fallVelocity = 0;
+      }
+    }
+
+    if (
+      platform.fallState ===
+      "falling"
+    ) {
+      platform.fallVelocity -=
+        platform.fallGravity *
+        dt;
+
+      platform.y +=
+        platform.fallVelocity *
+        dt;
+
+      if (
+        wasStanding
+      ) {
+        player.y +=
+          platform.y -
+          oldY;
+
+        player.isGrounded = true;
+      }
+
+      if (
+        platform.y <
+        platform.startY -
+        platform.removeDistance
+      ) {
+        platform.fallState =
+          "respawning";
+
+        platform.fallTimer = 0;
+
+        platform.solid = false;
+        platform.visible = false;
+      }
+    }
+
+    if (
+      platform.fallState ===
+      "respawning"
+    ) {
+      platform.fallTimer +=
+        dt;
+
+      if (
+        platform.fallTimer >=
+        platform.respawnDelay
+      ) {
+        platform.x =
+          platform.startX;
+
+        platform.y =
+          platform.startY;
+
+        platform.z =
+          platform.startZ;
+
+        platform.fallVelocity = 0;
+        platform.fallTimer = 0;
+
+        platform.solid = true;
+        platform.visible = true;
+
+        platform.color =
+          platform.baseColor;
+
+        platform.fallState =
+          "idle";
+      }
+    }
+  }
+
+  function updateDynamicPlatforms(dt) {
+    for (
+      const platform
+      of dynamicPlatforms
+    ) {
+      if (
+        platform.dynamicType ===
+        "lift"
+      ) {
+        moveLiftPlatform(
+          platform,
+          dt
+        );
+      }
+
+      if (
+        platform.dynamicType ===
+        "falling"
+      ) {
+        moveFallingPlatform(
+          platform,
+          dt
+        );
+      }
+    }
+  }
+
+  function resetDynamicPlatforms() {
+    for (
+      const platform
+      of dynamicPlatforms
+    ) {
+      platform.x =
+        platform.startX;
+
+      platform.y =
+        platform.startY;
+
+      platform.z =
+        platform.startZ;
+
+      platform.solid = true;
+      platform.visible = true;
+
+      if (
+        platform.dynamicType ===
+        "lift"
+      ) {
+        platform.motionOffset =
+          platform.initialMotionOffset;
+
+        platform.motionDirection = 1;
+
+        platform.x =
+          platform.startX;
+
+        platform.y =
+          platform.startY;
+
+        platform.z =
+          platform.startZ;
+
+        platform[
+          platform.motionAxis
+        ] +=
+          platform.motionOffset;
+      }
+
+      if (
+        platform.dynamicType ===
+        "falling"
+      ) {
+        platform.fallState =
+          "idle";
+
+        platform.fallTimer = 0;
+        platform.fallVelocity = 0;
+
+        platform.color =
+          platform.baseColor;
+      }
+    }
+  }
+
+  let goalReached = false;
+
+  function updateGoal() {
+    const p = getBounds(player);
+    const g = getBounds(goalPlatform);
+
+    const horizontalInside =
+      player.x > g.minX &&
+      player.x < g.maxX &&
+      player.z > g.minZ &&
+      player.z < g.maxZ;
+
+    const feetY = p.minY;
+    const onTop =
+      Math.abs(feetY - g.maxY) < 0.12;
+
+    if (
+      horizontalInside &&
+      onTop &&
+      player.isGrounded
+    ) {
+      goalReached = true;
+    }
+  }
+
+  // =========================================================
+  // 当たり判定
+  // =========================================================
+
+  function getBounds(box) {
+    return {
+      minX: box.x - box.w / 2,
+      maxX: box.x + box.w / 2,
+
+      minY: box.y - box.h / 2,
+      maxY: box.y + box.h / 2,
+
+      minZ: box.z - box.d / 2,
+      maxZ: box.z + box.d / 2
+    };
+  }
+
+  function intersects(a, b) {
+    const A = getBounds(a);
+    const B = getBounds(b);
+
+    return (
+      A.minX < B.maxX &&
+      A.maxX > B.minX &&
+      A.minY < B.maxY &&
+      A.maxY > B.minY &&
+      A.minZ < B.maxZ &&
+      A.maxZ > B.minZ
+    );
+  }
+
+  function getSolidCollisions(box) {
+    const collisions = [];
+
+    for (const obj of objects) {
+      if (!obj.solid) continue;
+
+      if (intersects(box, obj)) {
+        collisions.push(obj);
+      }
+    }
+
+    return collisions;
+  }
+
+  // =========================================================
+  // 三角形 vs 自キャラAABB
+  //
+  // Separating Axis Theorem (SAT) を使う
+  // 候補軸:
+  //   ・自キャラAABBのX/Y/Z軸
+  //   ・三角形の法線
+  //   ・三角形3辺 × AABB3軸 の外積9本
+  //
+  // 全軸で投影区間が重なれば衝突
+  // 最小の重なり軸を押し戻し方向(MTV)に使う
+  // =========================================================
+
+  function boundsOverlap(a, b, padding = 0) {
+    return (
+      a.minX <= b.maxX + padding &&
+      a.maxX >= b.minX - padding &&
+      a.minY <= b.maxY + padding &&
+      a.maxY >= b.minY - padding &&
+      a.minZ <= b.maxZ + padding &&
+      a.maxZ >= b.minZ - padding
+    );
+  }
+
+  function projectTriangleOnAxis(triangle, axis) {
+    const pa = vec3Dot(triangle.a, axis);
+    const pb = vec3Dot(triangle.b, axis);
+    const pc = vec3Dot(triangle.c, axis);
+
+    return {
+      min: Math.min(pa, pb, pc),
+      max: Math.max(pa, pb, pc)
+    };
+  }
+
+  function projectAabbOnAxis(box, axis) {
+    const center = {
+      x: box.x,
+      y: box.y,
+      z: box.z
+    };
+
+    const hx = box.w / 2;
+    const hy = box.h / 2;
+    const hz = box.d / 2;
+
+    const centerProjection =
+      vec3Dot(center, axis);
+
+    const radius =
+      hx * Math.abs(axis.x) +
+      hy * Math.abs(axis.y) +
+      hz * Math.abs(axis.z);
+
+    return {
+      min: centerProjection - radius,
+      max: centerProjection + radius
+    };
+  }
+
+  function triangleAabbCollision(triangle, box) {
+    const boxBounds = getBounds(box);
+
+    if (!boundsOverlap(boxBounds, triangle.bounds, 0.01)) {
+      return null;
+    }
+
+    const edge0 = vec3Sub(triangle.b, triangle.a);
+    const edge1 = vec3Sub(triangle.c, triangle.b);
+    const edge2 = vec3Sub(triangle.a, triangle.c);
+
+    const boxAxes = [
+      { x: 1, y: 0, z: 0 },
+      { x: 0, y: 1, z: 0 },
+      { x: 0, y: 0, z: 1 }
+    ];
+
+    const axes = [
+      ...boxAxes,
+      triangle.normal
+    ];
+
+    for (const edge of [edge0, edge1, edge2]) {
+      for (const boxAxis of boxAxes) {
+        axes.push(vec3Cross(edge, boxAxis));
+      }
+    }
+
+    let minimumOverlap = Infinity;
+    let minimumAxis = null;
+
+    for (let axis of axes) {
+      const axisLength = vec3Length(axis);
+
+      if (axisLength < 1e-7) {
+        continue;
+      }
+
+      axis = {
+        x: axis.x / axisLength,
+        y: axis.y / axisLength,
+        z: axis.z / axisLength
+      };
+
+      const triProjection =
+        projectTriangleOnAxis(triangle, axis);
+
+      const boxProjection =
+        projectAabbOnAxis(box, axis);
+
+      const overlap =
+        Math.min(
+          triProjection.max,
+          boxProjection.max
+        ) -
+        Math.max(
+          triProjection.min,
+          boxProjection.min
+        );
+
+      // 三角形は厚み0なので、ほぼ接触状態も衝突候補として扱う
+      if (overlap < -0.0005) {
+        return null;
+      }
+
+      const resolvedOverlap =
+        Math.max(overlap, 0.0005);
+
+      if (resolvedOverlap < minimumOverlap) {
+        minimumOverlap = resolvedOverlap;
+        minimumAxis = axis;
+      }
+    }
+
+    if (!minimumAxis) {
+      return null;
+    }
+
+    const fromTriangleToPlayer = {
+      x: box.x - triangle.center.x,
+      y: box.y - triangle.center.y,
+      z: box.z - triangle.center.z
+    };
+
+    if (
+      vec3Dot(
+        fromTriangleToPlayer,
+        minimumAxis
+      ) < 0
+    ) {
+      minimumAxis = {
+        x: -minimumAxis.x,
+        y: -minimumAxis.y,
+        z: -minimumAxis.z
+      };
+    }
+
+    // 面固有の法線は反転させない
+    // closedSolidではこれが外向き法線になる
+    const faceNormal =
+      triangle.normal;
+
+    // MTV側はプレイヤーを三角形から離す方向
+    const contactNormal =
+      minimumAxis;
+
+    return {
+      triangle,
+      axis: minimumAxis,
+
+      // 上面/底面/側面の分類に使う
+      faceNormal,
+
+      // 実際の押し戻し方向
+      contactNormal,
+
+      penetration: minimumOverlap,
+
+      mtv: {
+        x: minimumAxis.x * (minimumOverlap + 0.001),
+        y: minimumAxis.y * (minimumOverlap + 0.001),
+        z: minimumAxis.z * (minimumOverlap + 0.001)
+      }
+    };
+  }
+
+  function getMeshCollisions(box) {
+    const collisions = [];
+    const boxBounds = getBounds(box);
+
+    for (const mesh of meshObjects) {
+      if (!mesh.solid) continue;
+      if (!boundsOverlap(boxBounds, mesh.bounds, 0.05)) continue;
+
+      for (const triangle of mesh.worldTriangles) {
+        const hit = triangleAabbCollision(triangle, box);
+
+        if (hit) {
+          collisions.push(hit);
+        }
+      }
+    }
+
+    return collisions;
+  }
+
+  function pointInTriangleXZ(px, pz, triangle) {
+    const ax = triangle.a.x;
+    const az = triangle.a.z;
+    const bx = triangle.b.x;
+    const bz = triangle.b.z;
+    const cx = triangle.c.x;
+    const cz = triangle.c.z;
+
+    const v0x = cx - ax;
+    const v0z = cz - az;
+    const v1x = bx - ax;
+    const v1z = bz - az;
+    const v2x = px - ax;
+    const v2z = pz - az;
+
+    const dot00 = v0x * v0x + v0z * v0z;
+    const dot01 = v0x * v1x + v0z * v1z;
+    const dot02 = v0x * v2x + v0z * v2z;
+    const dot11 = v1x * v1x + v1z * v1z;
+    const dot12 = v1x * v2x + v1z * v2z;
+
+    const denom =
+      dot00 * dot11 -
+      dot01 * dot01;
+
+    if (Math.abs(denom) < 1e-8) {
+      return false;
+    }
+
+    const invDenom = 1 / denom;
+
+    const u =
+      (dot11 * dot02 -
+       dot01 * dot12) *
+      invDenom;
+
+    const v =
+      (dot00 * dot12 -
+       dot01 * dot02) *
+      invDenom;
+
+    const tolerance = 0.03;
+
+    return (
+      u >= -tolerance &&
+      v >= -tolerance &&
+      u + v <= 1 + tolerance
+    );
+  }
+
+  function triangleYAtXZ(triangle, x, z) {
+    const n = triangle.normal;
+
+    if (Math.abs(n.y) < 1e-6) {
+      return null;
+    }
+
+    return (
+      triangle.a.y -
+      (
+        n.x * (x - triangle.a.x) +
+        n.z * (z - triangle.a.z)
+      ) / n.y
+    );
+  }
+
+  function getWalkableSurfaceY(triangle) {
+    // プレイヤー底面の中心＋四隅を調べる
+    // 三角形のXZ投影内に入っている点のうち
+    // 一番高い面位置へ足元を合わせる
+    const hx = player.w * 0.44;
+    const hz = player.d * 0.44;
+
+    const samples = [
+      [player.x,      player.z],
+      [player.x - hx, player.z - hz],
+      [player.x + hx, player.z - hz],
+      [player.x - hx, player.z + hz],
+      [player.x + hx, player.z + hz]
+    ];
+
+    let surfaceY = -Infinity;
+
+    for (const [x, z] of samples) {
+      if (!pointInTriangleXZ(x, z, triangle)) {
+        continue;
+      }
+
+      const y =
+        triangleYAtXZ(
+          triangle,
+          x,
+          z
+        );
+
+      if (y !== null) {
+        surfaceY =
+          Math.max(
+            surfaceY,
+            y
+          );
+      }
+    }
+
+    return Number.isFinite(surfaceY)
+      ? surfaceY
+      : null;
+  }
+
+
+  function getCeilingSurfaceY(triangle) {
+    const hx = player.w * 0.44;
+    const hz = player.d * 0.44;
+
+    const samples = [
+      [player.x,      player.z],
+      [player.x - hx, player.z - hz],
+      [player.x + hx, player.z - hz],
+      [player.x - hx, player.z + hz],
+      [player.x + hx, player.z + hz]
+    ];
+
+    let surfaceY = Infinity;
+
+    for (const [x, z] of samples) {
+      if (!pointInTriangleXZ(x, z, triangle)) {
+        continue;
+      }
+
+      const y =
+        triangleYAtXZ(
+          triangle,
+          x,
+          z
+        );
+
+      if (y !== null) {
+        surfaceY =
+          Math.min(
+            surfaceY,
+            y
+          );
+      }
+    }
+
+    return Number.isFinite(surfaceY)
+      ? surfaceY
+      : null;
+  }
+
+  function xzBoundsOverlap(a, b, tolerance = 0) {
+    return (
+      a.minX <= b.maxX + tolerance &&
+      a.maxX >= b.minX - tolerance &&
+      a.minZ <= b.maxZ + tolerance &&
+      a.maxZ >= b.minZ - tolerance
+    );
+  }
+
+  function isSurfaceNearFeet(
+    surfaceY,
+    belowTolerance = 0.16,
+    aboveTolerance = 0.12
+  ) {
+    const feetY =
+      player.y -
+      player.h / 2;
+
+    const gap =
+      feetY -
+      surfaceY;
+
+    return (
+      gap >= -aboveTolerance &&
+      gap <= belowTolerance
+    );
+  }
+
+  function isSurfaceNearHead(
+    surfaceY,
+    belowTolerance = 0.12,
+    aboveTolerance = 0.16
+  ) {
+    const headY =
+      player.y +
+      player.h / 2;
+
+    const gap =
+      surfaceY -
+      headY;
+
+    return (
+      gap >= -belowTolerance &&
+      gap <= aboveTolerance
+    );
+  }
+
+  function isPlayerCenterInsideXZBounds(
+    bounds,
+    inset = 0.04
+  ) {
+    const minX =
+      Math.min(
+        bounds.minX + inset,
+        (bounds.minX + bounds.maxX) / 2
+      );
+
+    const maxX =
+      Math.max(
+        bounds.maxX - inset,
+        (bounds.minX + bounds.maxX) / 2
+      );
+
+    const minZ =
+      Math.min(
+        bounds.minZ + inset,
+        (bounds.minZ + bounds.maxZ) / 2
+      );
+
+    const maxZ =
+      Math.max(
+        bounds.maxZ - inset,
+        (bounds.minZ + bounds.maxZ) / 2
+      );
+
+    return (
+      player.x >= minX &&
+      player.x <= maxX &&
+      player.z >= minZ &&
+      player.z <= maxZ
+    );
+  }
+
+  function getCenteredCeilingSurfaceY(
+    triangle
+  ) {
+    // 天井はプレイヤー中心の真上に面がある場合だけ採用する
+    // 足場側面へめり込んだときに、その底面の端を
+    // 「頭上の天井」と誤認するのを防ぐ
+    if (
+      !pointInTriangleXZ(
+        player.x,
+        player.z,
+        triangle
+      )
+    ) {
+      return null;
+    }
+
+    return triangleYAtXZ(
+      triangle,
+      player.x,
+      player.z
+    );
+  }
+
+  // 現在のXZ位置で「足元の床」と「頭上の天井」を独立して求める
+  // MTVの押し戻しに任せず、上下方向はこの縦スロット内に制限する
+  function getVerticalRoomInfo() {
+    const pb =
+      getBounds(player);
+
+    const feetY =
+      pb.minY;
+
+    const headY =
+      pb.maxY;
+
+    let floorY = -Infinity;
+    let ceilingY = Infinity;
+
+    // -------------------------------------------------------
+    // 直方体
+    //
+    // XZが重なるだけでは床・天井にしない
+    // 上面が足裏付近、下面が頭頂付近にある場合だけ候補にする
+    // -------------------------------------------------------
+
+    for (const obj of objects) {
+      if (!obj.solid) {
+        continue;
+      }
+
+      const b =
+        getBounds(obj);
+
+      if (
+        !xzBoundsOverlap(
+          pb,
+          b,
+          0.01
+        )
+      ) {
+        continue;
+      }
+
+      const floorGap =
+        feetY -
+        b.maxY;
+
+      if (
+        floorGap >= -0.12 &&
+        floorGap <= 0.16 &&
+        b.maxY > floorY
+      ) {
+        floorY =
+          b.maxY;
+      }
+
+      const ceilingGap =
+        b.minY -
+        headY;
+
+      if (
+        isPlayerCenterInsideXZBounds(
+          b,
+          0.04
+        ) &&
+        ceilingGap >= -0.12 &&
+        ceilingGap <= 0.16 &&
+        b.minY < ceilingY
+      ) {
+        ceilingY =
+          b.minY;
+      }
+    }
+
+    // -------------------------------------------------------
+    // 三角メッシュ
+    // -------------------------------------------------------
+
+    for (const mesh of meshObjects) {
+      if (!mesh.solid) {
+        continue;
+      }
+
+      if (
+        !xzBoundsOverlap(
+          pb,
+          mesh.bounds,
+          0.04
+        )
+      ) {
+        continue;
+      }
+
+      for (
+        const triangle
+        of mesh.worldTriangles
+      ) {
+        const n =
+          triangle.normal;
+
+        // 上向き面 = 床候補
+        if (n.y > 0.48) {
+          const y =
+            getWalkableSurfaceY(
+              triangle
+            );
+
+          if (
+            y !== null &&
+            isSurfaceNearFeet(
+              y,
+              0.16,
+              0.12
+            ) &&
+            y > floorY
+          ) {
+            floorY = y;
+          }
+        }
+
+        // 下向き面 = 天井候補
+        if (n.y < -0.48) {
+          const y =
+            getCenteredCeilingSurfaceY(
+              triangle
+            );
+
+          if (
+            y !== null &&
+            isSurfaceNearHead(
+              y,
+              0.12,
+              0.16
+            ) &&
+            y < ceilingY
+          ) {
+            ceilingY = y;
+          }
+        }
+      }
+    }
+
+    const hasFloor =
+      Number.isFinite(
+        floorY
+      );
+
+    const hasCeiling =
+      Number.isFinite(
+        ceilingY
+      );
+
+    const clearance =
+      hasFloor &&
+      hasCeiling
+        ? ceilingY -
+          floorY
+        : Infinity;
+
+    const margin =
+      0.012;
+
+    return {
+      floorY,
+      ceilingY,
+      hasFloor,
+      hasCeiling,
+      clearance,
+
+      minCenterY:
+        hasFloor
+          ? floorY +
+            player.h / 2 +
+            margin
+          : -Infinity,
+
+      maxCenterY:
+        hasCeiling
+          ? ceilingY -
+            player.h / 2 -
+            margin
+          : Infinity,
+
+      tooTight:
+        hasFloor &&
+        hasCeiling &&
+        clearance <
+          player.h +
+          margin * 2
+    };
+  }
+
+  function stabilizeVerticalRoom() {
+    const room =
+      getVerticalRoomInfo();
+
+    player.isVerticallyCrushed =
+      room.tooTight;
+
+    if (!room.tooTight) {
+      return room;
+    }
+
+    // 物理的に身長が入らない隙間では
+    // 床側を優先して固定する
+    // 天井MTVに押されて床をすり抜けるのを防ぐ
+    if (room.hasFloor) {
+      player.y =
+        room.minCenterY;
+
+      player.isGrounded = true;
+      player.jumpStartY = player.y;
+    }
+
+    player.verticalSpeed = 0;
+
+    return room;
+  }
+
+  function resolveMeshCollisions(maxIterations = 5, ignoreVerticalFaces = false) {
+    let touchedFloor = false;
+
+    for (
+      let iteration = 0;
+      iteration < maxIterations;
+      iteration++
+    ) {
+      let collisions =
+        getMeshCollisions(player);
+
+      if (ignoreVerticalFaces) {
+        collisions =
+          collisions.filter(
+            hit =>
+              Math.abs(hit.faceNormal.y) <= 0.48
+          );
+      }
+
+      if (collisions.length === 0) {
+        break;
+      }
+
+      collisions.sort(
+        (a, b) =>
+          b.penetration -
+          a.penetration
+      );
+
+      const hit =
+        collisions[0];
+
+      // 閉じた立体の「外向き法線」
+      const n =
+        hit.faceNormal;
+
+      const playerBounds =
+        getBounds(player);
+
+      const feetY =
+        playerBounds.minY;
+
+      const headY =
+        playerBounds.maxY;
+
+      const surfaceY =
+        Math.abs(n.y) > 0.48
+          ? getWalkableSurfaceY(hit.triangle)
+          : null;
+
+      // -----------------------------------------------------
+      // 上面 / 歩ける斜面
+      // -----------------------------------------------------
+
+      const walkable =
+        n.y > 0.48;
+
+      if (walkable) {
+        if (surfaceY !== null) {
+          const desiredPlayerY =
+            surfaceY +
+            player.h / 2 +
+            0.0015;
+
+          const floorGap =
+            feetY -
+            surfaceY;
+
+          // 本当に足裏付近へ面が来ていて、
+          // かつ上昇中ではない場合だけ床として扱う
+          //
+          // 側面に触れているだけなら、
+          // 上向き三角形がAABBに入っても接地させない
+          const supportedFromBelow =
+            floorGap >= -0.12 &&
+            floorGap <= 0.16 &&
+            player.verticalSpeed <= 0.5;
+
+          if (supportedFromBelow) {
+            player.y =
+              Math.max(
+                player.y,
+                desiredPlayerY
+              );
+
+            touchedFloor = true;
+            player.isGrounded = true;
+
+            if (
+              player.verticalSpeed < 0
+            ) {
+              player.verticalSpeed = 0;
+            }
+
+            // 斜面では水平速度を削らない
+            continue;
+          }
+        }
+      }
+
+      // -----------------------------------------------------
+      // 底面
+      //
+      // 外向き法線が-Yなので、下からジャンプして当たれば
+      // 天井として押し戻す
+      // -----------------------------------------------------
+
+      if (n.y < -0.48) {
+        player.x += hit.mtv.x;
+        player.y += hit.mtv.y;
+        player.z += hit.mtv.z;
+
+        if (
+          player.verticalSpeed > 0
+        ) {
+          player.verticalSpeed = 0;
+        }
+
+        continue;
+      }
+
+      // -----------------------------------------------------
+      // 側面 / 急斜面
+      //
+      // 全側面を壁として扱い、法線方向へ押し戻す
+      // -----------------------------------------------------
+
+      player.x +=
+        hit.mtv.x;
+
+      player.y +=
+        hit.mtv.y;
+
+      player.z +=
+        hit.mtv.z;
+
+      const horizontalLength =
+        Math.hypot(
+          n.x,
+          n.z
+        );
+
+      if (
+        horizontalLength > 0.01
+      ) {
+        const nx =
+          n.x /
+          horizontalLength;
+
+        const nz =
+          n.z /
+          horizontalLength;
+
+        // 外向き法線に対して負方向へ進んでいる
+        // = 立体内部へ向かっている
+        const intoSolid =
+          player.vx * nx +
+          player.vz * nz;
+
+        if (intoSolid < 0) {
+          player.vx -=
+            nx * intoSolid;
+
+          player.vz -=
+            nz * intoSolid;
+        }
+      }
+
+      // 急斜面の下側へ頭をぶつけた場合
+      if (
+        hit.mtv.y < 0 &&
+        player.verticalSpeed > 0
+      ) {
+        player.verticalSpeed = 0;
+      }
+    }
+
+    return touchedFloor;
+  }
+
+  function hasMeshGroundSupport(probe = 0.08) {
+    const oldY = player.y;
+
+    player.y -= probe;
+
+    const collisions = getMeshCollisions(player);
+
+    player.y = oldY;
+
+    for (const hit of collisions) {
+      if (
+        hit.faceNormal.y > 0.48 &&
+        hit.mtv.y >= -0.02
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // =========================================================
+  // 水平衝突移動
+  // =========================================================
+
+  function getHorizontalBlockingCollisions(box) {
+    const collisions = [];
+
+    const playerBounds = getBounds(box);
+    const feetY = playerBounds.minY;
+
+    // 着地位置は浮動小数点誤差で足場へ
+    // ごくわずかに食い込む場合がある
+    const supportTolerance = 0.08;
+
+    for (const obj of objects) {
+      if (!obj.solid) continue;
+      if (!intersects(box, obj)) continue;
+
+      const objBounds = getBounds(obj);
+
+      // 自キャラの足元がオブジェクト上面付近にあるなら、
+      // そのオブジェクトは「壁」ではなく「乗っている床」とみなす
+      //
+      // これにより着地中の足場そのものが
+      // 横移動をブロックしなくなる
+      const standingOnTop =
+        feetY >= objBounds.maxY - supportTolerance;
+
+      if (standingOnTop) {
+        continue;
+      }
+
+      collisions.push(obj);
+    }
+
+    return collisions;
+  }
+
+
+  function rayIntersectsTriangle(origin, direction, triangle) {
+    const epsilon = 1e-7;
+
+    const edge1 =
+      vec3Sub(
+        triangle.b,
+        triangle.a
+      );
+
+    const edge2 =
+      vec3Sub(
+        triangle.c,
+        triangle.a
+      );
+
+    const h =
+      vec3Cross(
+        direction,
+        edge2
+      );
+
+    const a =
+      vec3Dot(
+        edge1,
+        h
+      );
+
+    if (
+      a > -epsilon &&
+      a < epsilon
+    ) {
+      return null;
+    }
+
+    const f = 1 / a;
+
+    const s =
+      vec3Sub(
+        origin,
+        triangle.a
+      );
+
+    const u =
+      f *
+      vec3Dot(
+        s,
+        h
+      );
+
+    if (
+      u < -epsilon ||
+      u > 1 + epsilon
+    ) {
+      return null;
+    }
+
+    const q =
+      vec3Cross(
+        s,
+        edge1
+      );
+
+    const v =
+      f *
+      vec3Dot(
+        direction,
+        q
+      );
+
+    if (
+      v < -epsilon ||
+      u + v > 1 + epsilon
+    ) {
+      return null;
+    }
+
+    const t =
+      f *
+      vec3Dot(
+        edge2,
+        q
+      );
+
+    if (t <= epsilon) {
+      return null;
+    }
+
+    return t;
+  }
+
+  function isPointInsideClosedMesh(point, mesh) {
+    if (!mesh.closedSolid) {
+      return false;
+    }
+
+    // AABB外なら明確に外
+    if (
+      point.x < mesh.bounds.minX ||
+      point.x > mesh.bounds.maxX ||
+      point.y < mesh.bounds.minY ||
+      point.y > mesh.bounds.maxY ||
+      point.z < mesh.bounds.minZ ||
+      point.z > mesh.bounds.maxZ
+    ) {
+      return false;
+    }
+
+    // +X方向へレイを飛ばして交差回数の奇偶で判定
+    // 頂点や辺への完全一致を避けるためY/Zをわずかにずらす
+    const origin = {
+      x: point.x,
+      y: point.y + 0.00037,
+      z: point.z + 0.00061
+    };
+
+    const direction = {
+      x: 1,
+      y: 0,
+      z: 0
+    };
+
+    const hits = [];
+
+    for (
+      const triangle
+      of mesh.worldTriangles
+    ) {
+      const t =
+        rayIntersectsTriangle(
+          origin,
+          direction,
+          triangle
+        );
+
+      if (t === null) {
+        continue;
+      }
+
+      // 同じ面を構成する2三角形を二重カウントしない
+      let duplicate = false;
+
+      for (const oldT of hits) {
+        if (
+          Math.abs(oldT - t) <
+          0.0005
+        ) {
+          duplicate = true;
+          break;
+        }
+      }
+
+      if (!duplicate) {
+        hits.push(t);
+      }
+    }
+
+    return hits.length % 2 === 1;
+  }
+
+  function getPlayerInteriorSamplePoints(
+    x,
+    y,
+    z
+  ) {
+    // AABBの中心だけだと薄い壁へ角から侵入したとき見逃すので
+    // 中心＋8隅の少し内側を調べる
+    const hx =
+      player.w * 0.46;
+
+    const hy =
+      player.h * 0.42;
+
+    const hz =
+      player.d * 0.46;
+
+    return [
+      { x, y, z },
+
+      { x: x - hx, y: y - hy, z: z - hz },
+      { x: x + hx, y: y - hy, z: z - hz },
+      { x: x - hx, y: y - hy, z: z + hz },
+      { x: x + hx, y: y - hy, z: z + hz },
+
+      { x: x - hx, y: y + hy, z: z - hz },
+      { x: x + hx, y: y + hy, z: z - hz },
+      { x: x - hx, y: y + hy, z: z + hz },
+      { x: x + hx, y: y + hy, z: z + hz }
+    ];
+  }
+
+  function countPlayerSamplesInsideMesh(
+    x,
+    y,
+    z,
+    mesh
+  ) {
+    let count = 0;
+
+    for (
+      const point
+      of getPlayerInteriorSamplePoints(
+        x,
+        y,
+        z
+      )
+    ) {
+      if (
+        isPointInsideClosedMesh(
+          point,
+          mesh
+        )
+      ) {
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  function isPlayerInsideAnyClosedMesh() {
+    for (
+      const mesh
+      of meshObjects
+    ) {
+      if (
+        !mesh.solid ||
+        !mesh.closedSolid
+      ) {
+        continue;
+      }
+
+      if (
+        countPlayerSamplesInsideMesh(
+          player.x,
+          player.y,
+          player.z,
+          mesh
+        ) > 0
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function wouldMoveIntoClosedMesh(
+    dx,
+    dz
+  ) {
+    if (
+      dx === 0 &&
+      dz === 0
+    ) {
+      return false;
+    }
+
+    const nextX =
+      player.x + dx;
+
+    const nextZ =
+      player.z + dz;
+
+    for (
+      const mesh
+      of meshObjects
+    ) {
+      if (
+        !mesh.solid ||
+        !mesh.closedSolid
+      ) {
+        continue;
+      }
+
+      const currentInsideCount =
+        countPlayerSamplesInsideMesh(
+          player.x,
+          player.y,
+          player.z,
+          mesh
+        );
+
+      const nextInsideCount =
+        countPlayerSamplesInsideMesh(
+          nextX,
+          player.y,
+          nextZ,
+          mesh
+        );
+
+      // 外から新しく内部へ入る
+      if (
+        currentInsideCount === 0 &&
+        nextInsideCount > 0
+      ) {
+        return true;
+      }
+
+      // すでに少し内部にいる場合は、
+      // さらに内部点が増える方向だけ止める
+      //
+      // 内部点が減る = 外へ抜ける方向なので許可
+      // 同数 = 壁沿い移動として許可
+      if (
+        currentInsideCount > 0 &&
+        nextInsideCount >
+          currentInsideCount
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+
+  function moveHorizontalAxis(axis, delta) {
+    if (delta === 0) return;
+
+    // 厚み0の三角面を飛び越えないよう細分化
+    const steps = Math.max(
+      1,
+      Math.ceil(
+        Math.abs(delta) /
+        player.collisionStep
+      )
+    );
+
+    const stepDelta =
+      delta / steps;
+
+    for (let i = 0; i < steps; i++) {
+      const oldX = player.x;
+      const oldY = player.y;
+      const oldZ = player.z;
+
+      const oldRoom =
+        getVerticalRoomInfo();
+
+      const testDx =
+        axis === "x"
+          ? stepDelta
+          : 0;
+
+      const testDz =
+        axis === "z"
+          ? stepDelta
+          : 0;
+
+      // -----------------------------------------------------
+      // 閉じたメッシュ全体に対して
+      // 「自キャラのサンプル点が立体内部へ入るか」を事前判定
+      //
+      // 外 → 内へ入る        -> 停止
+      // 内部点が増える        -> 停止
+      // 内部点が減る          -> 脱出方向なので許可
+      // 内部点が変わらない    -> 壁沿い移動として許可
+      // -----------------------------------------------------
+
+      if (
+        wouldMoveIntoClosedMesh(
+          testDx,
+          testDz
+        )
+      ) {
+        if (axis === "x") {
+          player.vx = 0;
+        } else {
+          player.vz = 0;
+        }
+
+        break;
+      }
+
+      if (axis === "x") {
+        player.x += stepDelta;
+      } else {
+        player.z += stepDelta;
+      }
+
+      // 既存の直方体オブジェクト
+      if (
+        getHorizontalBlockingCollisions(player)
+          .length > 0
+      ) {
+        player.x = oldX;
+        player.y = oldY;
+        player.z = oldZ;
+
+        if (axis === "x") {
+          player.vx = 0;
+        } else {
+          player.vz = 0;
+        }
+
+        break;
+      }
+
+      const newRoom =
+        getVerticalRoomInfo();
+
+      // 新しく身長未満の隙間へ潜り込む移動だけ禁止
+      //
+      // すでにtooTightになっている場合はここでは止めない
+      // wouldMoveIntoClosedMesh() が
+      // 「さらに内部へ入る方向」だけを止めるので、
+      // 横へ抜ける / 外へ出る移動は許可される
+      if (
+        newRoom.tooTight &&
+        !oldRoom.tooTight
+      ) {
+        player.x = oldX;
+        player.y = oldY;
+        player.z = oldZ;
+
+        if (axis === "x") {
+          player.vx = 0;
+        } else {
+          player.vz = 0;
+        }
+
+        break;
+      }
+
+      // 壁内部へ入る前に止めているので、
+      // 横移動では壁MTVによるY方向押し戻しを行わない
+      //
+      // 床・斜面の高さ合わせだけは残す
+      const meshHits =
+        getMeshCollisions(player);
+
+      for (const hit of meshHits) {
+        const n =
+          hit.faceNormal;
+
+        if (n.y <= 0.48) {
+          continue;
+        }
+
+        const surfaceY =
+          getWalkableSurfaceY(
+            hit.triangle
+          );
+
+        if (surfaceY === null) {
+          continue;
+        }
+
+        const feetY =
+          player.y -
+          player.h / 2;
+
+        const floorGap =
+          feetY -
+          surfaceY;
+
+        if (
+          floorGap >= -0.12 &&
+          floorGap <= 0.16 &&
+          player.verticalSpeed <= 0.5
+        ) {
+          player.y =
+            Math.max(
+              player.y,
+              surfaceY +
+              player.h / 2 +
+              0.0015
+            );
+
+          player.isGrounded = true;
+
+          if (
+            player.verticalSpeed < 0
+          ) {
+            player.verticalSpeed = 0;
+          }
+        }
+      }
+
+      // 念のため上下の隙間を再安定化
+      stabilizeVerticalRoom();
+    }
+  }
+
+  function moveHorizontal(dx, dz) {
+    moveHorizontalAxis("x", dx);
+    moveHorizontalAxis("z", dz);
+  }
+
+  // =========================================================
+  // 垂直移動
+  // =========================================================
+
+  function moveVerticalStep(stepDy) {
+    const roomBefore =
+      stabilizeVerticalRoom();
+
+    // 本当に上下から挟まれているなら上下移動させない
+    //
+    // 閉じたメッシュの側面へめり込んでいる場合は
+    // ジャンプ/落下で抜けられるよう固定しない
+    if (
+      roomBefore.tooTight &&
+      !isPlayerInsideAnyClosedMesh()
+    ) {
+      player.verticalSpeed = 0;
+      player.isGrounded = true;
+      return true;
+    }
+
+    const oldY =
+      player.y;
+
+    let nextY =
+      player.y + stepDy;
+
+    // -------------------------------------------------------
+    // 上昇時: 天井位置で直接クランプ
+    // -------------------------------------------------------
+
+    if (
+      stepDy > 0 &&
+      roomBefore.hasCeiling &&
+      nextY >= roomBefore.maxCenterY
+    ) {
+      player.y =
+        Math.max(
+          oldY,
+          roomBefore.maxCenterY
+        );
+
+      player.verticalSpeed = 0;
+
+      return true;
+    }
+
+    // -------------------------------------------------------
+    // 落下時: 床位置で直接クランプ
+    // -------------------------------------------------------
+
+    if (
+      stepDy < 0 &&
+      roomBefore.hasFloor &&
+      nextY <= roomBefore.minCenterY
+    ) {
+      player.y =
+        Math.min(
+          oldY,
+          roomBefore.minCenterY
+        );
+
+      player.verticalSpeed = 0;
+      player.isGrounded = true;
+      player.jumpStartY = player.y;
+
+      return true;
+    }
+
+    player.y =
+      nextY;
+
+    player.isGrounded = false;
+
+    // 上下方向は床/天井制約で処理したので、
+    // ここでは側面だけ押し戻す
+    resolveMeshCollisions(
+      8,
+      true
+    );
+
+    const roomAfter =
+      stabilizeVerticalRoom();
+
+    if (
+      roomAfter.tooTight &&
+      !isPlayerInsideAnyClosedMesh()
+    ) {
+      return true;
+    }
+
+    // 移動後に床/天井を跨いでいた場合の保険
+    if (
+      stepDy > 0 &&
+      roomAfter.hasCeiling &&
+      player.y > roomAfter.maxCenterY
+    ) {
+      player.y =
+        roomAfter.maxCenterY;
+
+      player.verticalSpeed = 0;
+      return true;
+    }
+
+    if (
+      stepDy < 0 &&
+      roomAfter.hasFloor &&
+      player.y < roomAfter.minCenterY
+    ) {
+      player.y =
+        roomAfter.minCenterY;
+
+      player.verticalSpeed = 0;
+      player.isGrounded = true;
+      player.jumpStartY = player.y;
+
+      return true;
+    }
+
+    return false;
+  }
+
+  function moveVertical(dy) {
+    if (dy === 0) return;
+
+    // 最大落下速度でも三角面を飛び越えないよう
+    // 垂直移動も同じく細かく分割する
+    const steps = Math.max(
+      1,
+      Math.ceil(
+        Math.abs(dy) /
+        player.collisionStep
+      )
+    );
+
+    const stepDy =
+      dy / steps;
+
+    for (let i = 0; i < steps; i++) {
+      const blocked =
+        moveVerticalStep(stepDy);
+
+      if (blocked) {
+        break;
+      }
+    }
+  }
+
+  function checkGrounded() {
+    const room =
+      stabilizeVerticalRoom();
+
+    if (
+      room.tooTight &&
+      !isPlayerInsideAnyClosedMesh()
+    ) {
+      player.isGrounded = true;
+      player.verticalSpeed = 0;
+      return;
+    }
+
+    if (!room.hasFloor) {
+      player.isGrounded = false;
+      return;
+    }
+
+    const feetY =
+      player.y -
+      player.h / 2;
+
+    const distanceToFloor =
+      feetY -
+      room.floorY;
+
+    // room.floorY自体が「足裏付近の面」に限定されているため、
+    // 側面接触だけでGROUNDへ固定されることはない
+    if (
+      distanceToFloor >= -0.025 &&
+      distanceToFloor <= 0.10 &&
+      player.verticalSpeed <= 0.5
+    ) {
+      player.y =
+        room.minCenterY;
+
+      player.isGrounded = true;
+
+      if (player.verticalSpeed < 0) {
+        player.verticalSpeed = 0;
+      }
+    } else {
+      player.isGrounded = false;
+    }
+  }
+
+  // =========================================================
+  // カメラ
+  // =========================================================
+
+  const camera = {
+    // カメラはプレイヤーを中心とした軌道上に置く
+    angle: 0,
+
+    // 見上げ / 見下ろし角
+    pitch: 0.42,
+    minPitch: -0.15,
+    maxPitch: 1.05,
+
+    // プレイヤーからの水平距離
+    distance: 11,
+
+    minDistance: 5.5,
+    maxDistance: 18,
+
+    // 操作中の基本速度
+    rotationSpeed: 1.9,
+    pitchSpeed: 1.25,
+    zoomSpeed: 8.0,
+
+    // 実際の操作速度
+    // 入力開始/終了時だけ短時間で加減速し、
+    // それ以外は一定速度で動かす
+    rotationVelocity: 0,
+    pitchVelocity: 0,
+    zoomVelocity: 0,
+
+    rotationAcceleration: 24.0,
+    rotationDeceleration: 34.0,
+
+    pitchAcceleration: 18.0,
+    pitchDeceleration: 28.0,
+
+    zoomAcceleration: 72.0,
+    zoomDeceleration: 96.0,
+
+    // 実際のカメラ位置
+    x: player.x,
+    y: player.y + 7,
+    z: player.z + 11,
+
+    targetX: player.x,
+    targetY: player.y + 0.3,
+    targetZ: player.z - 3.5,
+
+    focalLength: 700,
+
+    // ジャンプ中に維持する地上基準の高さ
+    groundBaseY: player.y + 2.6,
+
+    // 水平追従用の仮想中心
+    followX: player.x,
+    followZ: player.z
+  };
+
+  function resetGame() {
+    keys.clear();
+
+    // プレイヤー
+    player.x = PLAYER_START.x;
+    player.y = PLAYER_START.y;
+    player.z = PLAYER_START.z;
+
+    player.vx = 0;
+    player.vz = 0;
+    player.verticalSpeed = 0;
+
+    player.angle = PLAYER_START.angle;
+
+    player.isGrounded = true;
+    player.jumpStartY = PLAYER_START.y;
+    player.jumpReleased = false;
+    player.jumpLocked = false;
+    player.justLanded = false;
+    player.isVerticallyCrushed = false;
+
+    // カメラ
+    camera.angle =
+      currentStage &&
+      Number.isFinite(
+        currentStage.cameraAngle
+      )
+        ? currentStage.cameraAngle
+        : 0;
+
+    camera.pitch = 0.42;
+    camera.distance = 11;
+
+    camera.rotationVelocity = 0;
+    camera.pitchVelocity = 0;
+    camera.zoomVelocity = 0;
+
+    const resetPitchHeight =
+      Math.sin(camera.pitch) *
+      camera.distance;
+
+    const resetHorizontalDistance =
+      Math.cos(camera.pitch) *
+      camera.distance;
+
+    camera.x =
+      PLAYER_START.x +
+      Math.sin(camera.angle) *
+      resetHorizontalDistance;
+
+    camera.y =
+      PLAYER_START.y +
+      2.6 +
+      resetPitchHeight;
+
+    camera.z =
+      PLAYER_START.z +
+      Math.cos(camera.angle) *
+      resetHorizontalDistance;
+
+    camera.targetX = PLAYER_START.x;
+    camera.targetY = PLAYER_START.y + 0.3;
+    camera.targetZ = PLAYER_START.z;
+
+    camera.groundBaseY = PLAYER_START.y + 2.6;
+    camera.followX = PLAYER_START.x;
+    camera.followZ = PLAYER_START.z;
+
+    // ゴール
+    goalReached = false;
+    goalMessageEl.style.display = "none";
+
+    if (currentStage) {
+      goalDetailEl.textContent =
+        currentStage.name;
+    }
+
+    // 動的足場も初期状態へ戻す
+    resetDynamicPlatforms();
+
+    // 初期地点へ当たり判定を再適用
+    stabilizeVerticalRoom();
+    checkGrounded();
+
+    canvas.focus();
+  }
+
+  resetButton.addEventListener("click", resetGame);
+
+  function getStageSurfaceYAtXZ(
+    x,
+    z,
+    stage
+  ) {
+    let bestY =
+      -Infinity;
+
+    // 直方体の上面
+    for (
+      const obj
+      of stage.objects
+    ) {
+      if (!obj.solid) {
+        continue;
+      }
+
+      const b =
+        getBounds(obj);
+
+      if (
+        x >= b.minX &&
+        x <= b.maxX &&
+        z >= b.minZ &&
+        z <= b.maxZ
+      ) {
+        bestY =
+          Math.max(
+            bestY,
+            b.maxY
+          );
+      }
+    }
+
+    // 三角メッシュの実際の上面
+    for (
+      const mesh
+      of stage.meshes
+    ) {
+      if (!mesh.solid) {
+        continue;
+      }
+
+      for (
+        const triangle
+        of mesh.worldTriangles
+      ) {
+        if (
+          triangle.normal.y <= 0.48
+        ) {
+          continue;
+        }
+
+        if (
+          !pointInTriangleXZ(
+            x,
+            z,
+            triangle
+          )
+        ) {
+          continue;
+        }
+
+        const y =
+          triangleYAtXZ(
+            triangle,
+            x,
+            z
+          );
+
+        if (
+          y !== null
+        ) {
+          bestY =
+            Math.max(
+              bestY,
+              y
+            );
+        }
+      }
+    }
+
+    return Number.isFinite(
+      bestY
+    )
+      ? bestY
+      : null;
+  }
+
+  function loadStage(stageId) {
+    const stage =
+      STAGES[stageId];
+
+    if (!stage) {
+      return;
+    }
+
+    currentStageId =
+      stageId;
+
+    currentStage =
+      stage;
+
+    objects.splice(
+      0,
+      objects.length,
+      ...stage.objects
+    );
+
+    meshObjects.splice(
+      0,
+      meshObjects.length,
+      ...stage.meshes
+    );
+
+    dynamicPlatforms.splice(
+      0,
+      dynamicPlatforms.length,
+      ...stage.dynamics
+    );
+
+    goalPlatform =
+      stage.goal;
+
+    PLAYER_START.x =
+      stage.start.x;
+
+    PLAYER_START.y =
+      stage.start.y;
+
+    PLAYER_START.z =
+      stage.start.z;
+
+    PLAYER_START.angle =
+      stage.start.angle;
+
+    // -------------------------------------------------------
+    // スポーン位置は高さ関数の推定値ではなく、
+    // 実際に衝突判定へ使っている三角メッシュ上面から決める
+    //
+    // 曲面を粗い三角形へ分割すると、
+    // 元の高さ関数と三角面の高さに少し差が出るため
+    // その差で床の内側へスポーンするのを防ぐ
+    // -------------------------------------------------------
+
+    if (
+      stage.snapStartToSurface
+    ) {
+      const surfaceY =
+        getStageSurfaceYAtXZ(
+          PLAYER_START.x,
+          PLAYER_START.z,
+          stage
+        );
+
+      if (
+        surfaceY !== null
+      ) {
+        PLAYER_START.y =
+          surfaceY +
+          player.h / 2 +
+          0.025;
+      }
+    }
+
+    // 初回表示時だけGPUバッファを作成
+    for (
+      const mesh
+      of meshObjects
+    ) {
+      if (!mesh.gpu) {
+        buildMeshGpu(mesh);
+      }
+    }
+
+    stageSelect.value =
+      stageId;
+
+    stageDescriptionEl.textContent =
+      stage.description;
+
+    goalDetailEl.textContent =
+      stage.name;
+
+    resetGame();
+  }
+
+  stageSelect.addEventListener(
+    "change",
+    () => {
+      loadStage(
+        stageSelect.value
+      );
+    }
+  );
+
+  function updateCameraControls(dt) {
+    // -------------------------------------------------------
+    // 基本は一定速度
+    //
+    // キーを押し始めた瞬間だけ短く加速
+    // キーを離した瞬間だけ短く減速
+    // その間は targetVelocity を維持する
+    // -------------------------------------------------------
+
+    let rotationInput = 0;
+    let pitchInput = 0;
+    let zoomInput = 0;
+
+    if (keys.has("KeyQ")) rotationInput -= 1;
+    if (keys.has("KeyE")) rotationInput += 1;
+
+    if (keys.has("KeyW")) pitchInput += 1;
+    if (keys.has("KeyS")) pitchInput -= 1;
+
+    if (keys.has("KeyR")) zoomInput -= 1;
+    if (keys.has("KeyF")) zoomInput += 1;
+
+    const targetRotationVelocity =
+      rotationInput *
+      camera.rotationSpeed;
+
+    const targetPitchVelocity =
+      pitchInput *
+      camera.pitchSpeed;
+
+    const targetZoomVelocity =
+      zoomInput *
+      camera.zoomSpeed;
+
+    camera.rotationVelocity =
+      approachValue(
+        camera.rotationVelocity,
+        targetRotationVelocity,
+        (
+          rotationInput === 0
+            ? camera.rotationDeceleration
+            : camera.rotationAcceleration
+        ) * dt
+      );
+
+    camera.pitchVelocity =
+      approachValue(
+        camera.pitchVelocity,
+        targetPitchVelocity,
+        (
+          pitchInput === 0
+            ? camera.pitchDeceleration
+            : camera.pitchAcceleration
+        ) * dt
+      );
+
+    camera.zoomVelocity =
+      approachValue(
+        camera.zoomVelocity,
+        targetZoomVelocity,
+        (
+          zoomInput === 0
+            ? camera.zoomDeceleration
+            : camera.zoomAcceleration
+        ) * dt
+      );
+
+    // -------------------------------------------------------
+    // 速度 → カメラパラメータ
+    // -------------------------------------------------------
+
+    camera.angle +=
+      camera.rotationVelocity *
+      dt;
+
+    camera.angle =
+      normalizeAngle(
+        camera.angle
+      );
+
+    camera.pitch +=
+      camera.pitchVelocity *
+      dt;
+
+    if (camera.pitch <= camera.minPitch) {
+      camera.pitch =
+        camera.minPitch;
+
+      if (camera.pitchVelocity < 0) {
+        camera.pitchVelocity = 0;
+      }
+    }
+
+    if (camera.pitch >= camera.maxPitch) {
+      camera.pitch =
+        camera.maxPitch;
+
+      if (camera.pitchVelocity > 0) {
+        camera.pitchVelocity = 0;
+      }
+    }
+
+    camera.distance +=
+      camera.zoomVelocity *
+      dt;
+
+    if (
+      camera.distance <=
+      camera.minDistance
+    ) {
+      camera.distance =
+        camera.minDistance;
+
+      if (camera.zoomVelocity < 0) {
+        camera.zoomVelocity = 0;
+      }
+    }
+
+    if (
+      camera.distance >=
+      camera.maxDistance
+    ) {
+      camera.distance =
+        camera.maxDistance;
+
+      if (camera.zoomVelocity > 0) {
+        camera.zoomVelocity = 0;
+      }
+    }
+  }
+
+  function updateCamera(dt) {
+    updateCameraControls(dt);
+
+    // ---------------------------------------------------------
+    // 水平追従
+    //
+    // プレイヤーそのものではなく仮想中心 followX/followZ が
+    // 少し遅れて追従する
+    //
+    // そのためプレイヤーが動くと一時的に画面中央から
+    // 移動方向へずれ、停止するとカメラが追いつく
+    // ---------------------------------------------------------
+
+    const horizontalFollow = 1 - Math.pow(0.06, dt);
+
+    camera.followX +=
+      (player.x - camera.followX) * horizontalFollow;
+
+    camera.followZ +=
+      (player.z - camera.followZ) * horizontalFollow;
+
+    // カメラ角度に応じた軌道位置
+    // pitchは「向き」だけでなくカメラ軌道の高さにも使う
+    // distanceは純粋にズーム距離として独立
+    const horizontalDistance =
+      Math.cos(camera.pitch) *
+      camera.distance;
+
+    const pitchHeight =
+      Math.sin(camera.pitch) *
+      camera.distance;
+
+    const orbitX =
+      Math.sin(camera.angle) *
+      horizontalDistance;
+
+    const orbitZ =
+      Math.cos(camera.angle) *
+      horizontalDistance;
+
+    const desiredCameraX =
+      camera.followX +
+      orbitX;
+
+    const desiredCameraZ =
+      camera.followZ +
+      orbitZ;
+
+    // 手動回転・ズームに二重のイージングを掛けない
+    // プレイヤー追従の遅れは followX / followZ 側だけで表現する
+    camera.x =
+      desiredCameraX;
+
+    camera.z =
+      desiredCameraZ;
+
+    // ---------------------------------------------------------
+    // 垂直追従
+    //
+    // ジャンプ中は上方向へ追わない
+    // ---------------------------------------------------------
+
+    // ---------------------------------------------------------
+    // 高さ方向の遅延追従
+    //
+    // プレイヤーのYへすぐ追従せず、
+    // 基準高度 → 実カメラ → 注視点 の順にかなり遅れて付いていく
+    // ---------------------------------------------------------
+
+    // プレイヤー高さへの追従と手動pitchを分離する
+    const desiredGroundY =
+      player.y +
+      2.6;
+
+    // -------------------------------------------------------
+    // 高さ追従速度を状況別に切り替える
+    //
+    // 通常のジャンプ中:
+    //   かなり遅く追従
+    //
+    // 着地後:
+    //   速く追従して新しい地面高さへ合わせる
+    //
+    // ジャンプ開始地点より下へ落下中:
+    //   速く下方向へ追従する
+    // -------------------------------------------------------
+
+    const playerFeetY =
+      player.y - player.h / 2;
+
+    const jumpStartFeetY =
+      player.jumpStartY - player.h / 2;
+
+    const fallingBelowJumpStart =
+      !player.isGrounded &&
+      player.verticalSpeed < 0 &&
+      playerFeetY < jumpStartFeetY - 0.15;
+
+    let groundYFollow;
+    let verticalFollow;
+
+    if (player.isGrounded) {
+      // 着地したら素早くカメラ高度を合わせる
+      groundYFollow =
+        1 - Math.pow(0.015, dt);
+
+      verticalFollow =
+        1 - Math.pow(0.03, dt);
+
+    } else if (fallingBelowJumpStart) {
+      // ジャンプ開始地点より下に落ち始めたら
+      // 落下を追うように高速化
+      groundYFollow =
+        1 - Math.pow(0.02, dt);
+
+      verticalFollow =
+        1 - Math.pow(0.04, dt);
+
+    } else {
+      // 通常ジャンプ中はかなり遅く追従
+      groundYFollow =
+        1 - Math.pow(0.35, dt);
+
+      verticalFollow =
+        1 - Math.pow(0.55, dt);
+    }
+
+    camera.groundBaseY +=
+      (desiredGroundY - camera.groundBaseY) * groundYFollow;
+
+    // groundBaseY はプレイヤーの昇降だけを遅れて追う
+    // pitchHeight は操作速度どおり即座に反映する
+    camera.y =
+      camera.groundBaseY +
+      pitchHeight;
+
+    // ---------------------------------------------------------
+    // 注視点
+    //
+    // 仮想中心を見ることで、プレイヤーを完全に中央固定しない
+    // ---------------------------------------------------------
+
+    const desiredTargetX = camera.followX;
+    const desiredTargetZ = camera.followZ;
+
+    const targetFollow = 1 - Math.pow(0.02, dt);
+
+    camera.targetX +=
+      (desiredTargetX - camera.targetX) * targetFollow;
+
+    camera.targetZ +=
+      (desiredTargetZ - camera.targetZ) * targetFollow;
+
+    // 注視点の高さも同じ状況に応じて追従速度を変える
+    // 注視点はプレイヤー付近を基準にする
+    // pitchによって主にカメラ位置が上下するので
+    // 見上げ・見下ろしがズームとは独立して感じられる
+    const desiredTargetY =
+      player.y + 0.25;
+
+    let targetVerticalFollow;
+
+    if (player.isGrounded) {
+      targetVerticalFollow =
+        1 - Math.pow(0.05, dt);
+
+    } else if (fallingBelowJumpStart) {
+      targetVerticalFollow =
+        1 - Math.pow(0.06, dt);
+
+    } else {
+      targetVerticalFollow =
+        1 - Math.pow(0.65, dt);
+    }
+
+    camera.targetY +=
+      (desiredTargetY - camera.targetY) * targetVerticalFollow;
+  }
+
+  // =========================================================
+  // 入力方向
+  //
+  // カメラ基準で方向キーを世界座標へ変換
+  // =========================================================
+
+  function getMoveInput() {
+    let ix = 0;
+    let iz = 0;
+
+    if (keys.has("ArrowLeft"))  ix -= 1;
+    if (keys.has("ArrowRight")) ix += 1;
+    if (keys.has("ArrowUp"))    iz += 1;
+    if (keys.has("ArrowDown"))  iz -= 1;
+
+    const len = hypot2(ix, iz);
+
+    if (len === 0) {
+      return {
+        active: false,
+        x: 0,
+        z: 0,
+        strength: 0
+      };
+    }
+
+    ix /= len;
+    iz /= len;
+
+    // カメラの水平前方向
+    let forwardX = camera.targetX - camera.x;
+    let forwardZ = camera.targetZ - camera.z;
+
+    const forwardLen = hypot2(forwardX, forwardZ) || 1;
+
+    forwardX /= forwardLen;
+    forwardZ /= forwardLen;
+
+    // 右方向
+    const rightX = -forwardZ;
+    const rightZ = forwardX;
+
+    const worldX = rightX * ix + forwardX * iz;
+    const worldZ = rightZ * ix + forwardZ * iz;
+
+    return {
+      active: true,
+      x: worldX,
+      z: worldZ,
+      strength: 1
+    };
+  }
+
+  // =========================================================
+  // マリオ64風 水平移動
+  // =========================================================
+
+  function updateGroundMovement(input, dt) {
+    let speed = hypot2(player.vx, player.vz);
+
+    if (!input.active) {
+      // キーを離したあとの摩擦
+      // 速度の「大きさ」だけ減らし、
+      // 速度方向は現在の慣性方向をそのまま維持する
+      //
+      // 以前はplayer.angleからvx/vzを再生成していたため、
+      // 着地時に空中速度が自キャラの向きへ突然折れ曲がっていた
+      const oldSpeed =
+        speed;
+
+      const lowSpeedFriction =
+        oldSpeed < 3.0 ? 10.0 : 0.0;
+
+      speed = Math.max(
+        0,
+        oldSpeed -
+        (
+          player.groundDeceleration +
+          lowSpeedFriction
+        ) * dt
+      );
+
+      // ごく低速では完全停止
+      if (
+        speed < 0.12 ||
+        oldSpeed < 0.0001
+      ) {
+        player.vx = 0;
+        player.vz = 0;
+        return;
+      }
+
+      const scale =
+        speed / oldSpeed;
+
+      player.vx *= scale;
+      player.vz *= scale;
+
+      return;
+    }
+
+    const targetAngle = Math.atan2(
+      input.x,
+      -input.z
+    );
+
+    const velocitySpeed = hypot2(player.vx, player.vz);
+
+    let velocityAngle = player.angle;
+
+    if (velocitySpeed > 0.05) {
+      velocityAngle = Math.atan2(
+        player.vx,
+        -player.vz
+      );
+    }
+
+    const inputVsVelocity = normalizeAngle(
+      targetAngle - velocityAngle
+    );
+
+    // 真逆に近い入力ではまず強くブレーキ
+    if (
+      velocitySpeed > 1.0 &&
+      Math.cos(inputVsVelocity) < -0.45
+    ) {
+      speed = Math.max(
+        0,
+        velocitySpeed - player.reverseBrake * dt
+      );
+
+      player.angle = approachAngle(
+        player.angle,
+        targetAngle,
+        player.groundTurnSpeed * 0.45 * dt
+      );
+
+      if (speed < 0.25) {
+        player.angle = targetAngle;
+      }
+    } else {
+      // 通常旋回
+      player.angle = approachAngle(
+        player.angle,
+        targetAngle,
+        player.groundTurnSpeed * dt
+      );
+
+      speed = Math.min(
+        player.groundMaxSpeed,
+        velocitySpeed + player.groundAcceleration * dt
+      );
+    }
+
+    player.vx = Math.sin(player.angle) * speed;
+    player.vz = -Math.cos(player.angle) * speed;
+  }
+
+  function updateAirMovement(input, dt) {
+    // 空中は速度をほぼ維持
+    player.vx *= Math.max(0, 1 - player.airDrag * dt);
+    player.vz *= Math.max(0, 1 - player.airDrag * dt);
+
+    if (!input.active) {
+      return;
+    }
+
+    const targetAngle = Math.atan2(
+      input.x,
+      -input.z
+    );
+
+    player.angle = approachAngle(
+      player.angle,
+      targetAngle,
+      player.airTurnSpeed * dt
+    );
+
+    // 空中では入力方向へ少しだけ速度を足す
+    player.vx += input.x * player.airAcceleration * dt;
+    player.vz += input.z * player.airAcceleration * dt;
+
+    const speed = hypot2(player.vx, player.vz);
+
+    if (speed > player.airMaxSpeed) {
+      const s = player.airMaxSpeed / speed;
+      player.vx *= s;
+      player.vz *= s;
+    }
+  }
+
+  function updateHorizontalMovement(dt) {
+    const input = getMoveInput();
+
+    if (player.isGrounded) {
+      if (player.justLanded) {
+        // ---------------------------------------------------
+        // 着地直後
+        //
+        // 着地そのものから水平方向の推進力は発生させない
+        // 空中で持っていたvx/vzをそのまま1回だけ引き継ぐ
+        // ---------------------------------------------------
+        player.justLanded = false;
+      } else {
+        updateGroundMovement(
+          input,
+          dt
+        );
+      }
+    } else {
+      updateAirMovement(
+        input,
+        dt
+      );
+    }
+
+    moveHorizontal(
+      player.vx * dt,
+      player.vz * dt
+    );
+  }
+
+  // =========================================================
+  // ジャンプ
+  // =========================================================
+
+  function updateJump(dt) {
+    checkGrounded();
+
+    const jumpHeld = keys.has("KeyZ");
+
+    // Zを離したら、次回ジャンプ用のロックを解除
+    if (!jumpHeld && player.isGrounded) {
+      player.jumpLocked = false;
+    }
+
+    // -------------------------------------------------------
+    // ジャンプ開始
+    // -------------------------------------------------------
+
+    if (
+      player.isGrounded &&
+      jumpHeld &&
+      !player.jumpLocked
+    ) {
+      const room =
+        stabilizeVerticalRoom();
+
+      const headY =
+        player.y +
+        player.h / 2;
+
+      const headroom =
+        room.hasCeiling
+          ? room.ceilingY - headY
+          : Infinity;
+
+      const embeddedInClosedMesh =
+        isPlayerInsideAnyClosedMesh();
+
+      // 本当に上下から挟まれている場合はジャンプ禁止
+      //
+      // ただし側面へ少しめり込んでいる場合は
+      // ジャンプを脱出手段として残す
+      if (
+        !embeddedInClosedMesh &&
+        (
+          room.tooTight ||
+          headroom < 0.06
+        )
+      ) {
+        player.verticalSpeed = 0;
+        player.isGrounded = true;
+
+        // 押しっぱなしで毎フレーム再試行しない
+        player.jumpLocked = true;
+      } else {
+        player.isGrounded = false;
+        player.jumpStartY = player.y;
+
+        // ジャンプ開始時に一度だけ上向き初速を与える
+        player.verticalSpeed =
+          player.jumpInitialSpeed;
+
+        player.jumpReleased = false;
+        player.jumpLocked = true;
+      }
+    }
+
+    if (!player.isGrounded) {
+      const risen =
+        player.y - player.jumpStartY;
+
+      // -----------------------------------------------------
+      // Zを離した瞬間の急減速
+      //
+      // まだ上昇中なら、その速度を一度だけ大きく削る
+      // 以降は通常の重力だけで自然に落下する
+      // -----------------------------------------------------
+
+      if (
+        !jumpHeld &&
+        !player.jumpReleased
+      ) {
+        player.jumpReleased = true;
+
+        if (player.verticalSpeed > 0) {
+          player.verticalSpeed *=
+            player.jumpReleaseVelocityMultiplier;
+        }
+      }
+
+      // -----------------------------------------------------
+      // 重力
+      //
+      // ジャンプ中は常に下向き加速度だけを掛ける
+      // -----------------------------------------------------
+
+      player.verticalSpeed -=
+        player.gravity * dt;
+
+      player.verticalSpeed = Math.max(
+        player.verticalSpeed,
+        -player.maxFallSpeed
+      );
+
+      // -----------------------------------------------------
+      // 最大高度制限
+      // -----------------------------------------------------
+
+      if (
+        risen >= player.maxJumpRise &&
+        player.verticalSpeed > 0
+      ) {
+        player.verticalSpeed = 0;
+      }
+
+      let dy =
+        player.verticalSpeed * dt;
+
+      // 1フレームで最大高度を越えないようにする
+      if (dy > 0) {
+        const remainingRise =
+          player.maxJumpRise - risen;
+
+        if (remainingRise <= 0) {
+          dy = 0;
+          player.verticalSpeed = 0;
+        } else {
+          dy = Math.min(
+            dy,
+            remainingRise
+          );
+        }
+      }
+
+      const wasAirborneBeforeMove =
+        !player.isGrounded;
+
+      moveVertical(dy);
+
+      if (
+        wasAirborneBeforeMove &&
+        player.isGrounded
+      ) {
+        // このフレームの水平移動はすでに終わっているので、
+        // 次フレームの水平更新で着地速度を保存する
+        player.justLanded = true;
+      }
+    }
+  }
+
+  // =========================================================
+  // 3D数学
+  // =========================================================
+
+  function normalize(v) {
+    const len = Math.hypot(v.x, v.y, v.z) || 1;
+
+    return {
+      x: v.x / len,
+      y: v.y / len,
+      z: v.z / len
+    };
+  }
+
+  function cross(a, b) {
+    return {
+      x: a.y * b.z - a.z * b.y,
+      y: a.z * b.x - a.x * b.z,
+      z: a.x * b.y - a.y * b.x
+    };
+  }
+
+  function dot(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  function getCameraBasis() {
+    const forward = normalize({
+      x: camera.targetX - camera.x,
+      y: camera.targetY - camera.y,
+      z: camera.targetZ - camera.z
+    });
+
+    const worldUp = {
+      x: 0,
+      y: 1,
+      z: 0
+    };
+
+    const right = normalize(cross(forward, worldUp));
+    const up = normalize(cross(right, forward));
+
+    return {
+      right,
+      up,
+      forward
+    };
+  }
+
+  function project(point) {
+    const basis = getCameraBasis();
+
+    const relative = {
+      x: point.x - camera.x,
+      y: point.y - camera.y,
+      z: point.z - camera.z
+    };
+
+    const cx = dot(relative, basis.right);
+    const cy = dot(relative, basis.up);
+    const cz = dot(relative, basis.forward);
+
+    if (cz <= 0.1) {
+      return null;
+    }
+
+    const scale = camera.focalLength / cz;
+
+    return {
+      x: innerWidth / 2 + cx * scale,
+      y: innerHeight / 2 - cy * scale,
+      z: cz
+    };
+  }
+
+  // =========================================================
+  // WebGL描画
+  //
+  // ・深度バッファでピクセル単位の前後関係を解決
+  // ・背面カリングでカメラから見えない裏面を描画しない
+  // ・シャドウマップでオブジェクト同士の影を表現
+  // =========================================================
+
+  function compileShader(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error(log);
+    }
+
+    return shader;
+  }
+
+  function createProgram(vertexSource, fragmentSource) {
+    const program = gl.createProgram();
+
+    gl.attachShader(
+      program,
+      compileShader(gl.VERTEX_SHADER, vertexSource)
+    );
+
+    gl.attachShader(
+      program,
+      compileShader(gl.FRAGMENT_SHADER, fragmentSource)
+    );
+
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(program);
+      gl.deleteProgram(program);
+      throw new Error(log);
+    }
+
+    return program;
+  }
+
+  function mat4Multiply(a, b) {
+    const out = new Float32Array(16);
+
+    for (let col = 0; col < 4; col++) {
+      for (let row = 0; row < 4; row++) {
+        out[col * 4 + row] =
+          a[0 * 4 + row] * b[col * 4 + 0] +
+          a[1 * 4 + row] * b[col * 4 + 1] +
+          a[2 * 4 + row] * b[col * 4 + 2] +
+          a[3 * 4 + row] * b[col * 4 + 3];
+      }
+    }
+
+    return out;
+  }
+
+
+  function mat4Identity() {
+    return new Float32Array([
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ]);
+  }
+
+  function mat4Perspective(fovy, aspect, near, far) {
+    const f = 1 / Math.tan(fovy / 2);
+    const out = new Float32Array(16);
+
+    out[0] = f / aspect;
+    out[5] = f;
+    out[10] = (far + near) / (near - far);
+    out[11] = -1;
+    out[14] = (2 * far * near) / (near - far);
+
+    return out;
+  }
+
+  function mat4Ortho(left, right, bottom, top, near, far) {
+    const out = new Float32Array(16);
+
+    out[0] = 2 / (right - left);
+    out[5] = 2 / (top - bottom);
+    out[10] = -2 / (far - near);
+
+    out[12] = -(right + left) / (right - left);
+    out[13] = -(top + bottom) / (top - bottom);
+    out[14] = -(far + near) / (far - near);
+    out[15] = 1;
+
+    return out;
+  }
+
+  function mat4LookAt(eye, target, up) {
+    let zx = eye[0] - target[0];
+    let zy = eye[1] - target[1];
+    let zz = eye[2] - target[2];
+
+    let len = Math.hypot(zx, zy, zz) || 1;
+
+    zx /= len;
+    zy /= len;
+    zz /= len;
+
+    let xx =
+      up[1] * zz -
+      up[2] * zy;
+
+    let xy =
+      up[2] * zx -
+      up[0] * zz;
+
+    let xz =
+      up[0] * zy -
+      up[1] * zx;
+
+    len = Math.hypot(xx, xy, xz) || 1;
+
+    xx /= len;
+    xy /= len;
+    xz /= len;
+
+    const yx =
+      zy * xz -
+      zz * xy;
+
+    const yy =
+      zz * xx -
+      zx * xz;
+
+    const yz =
+      zx * xy -
+      zy * xx;
+
+    const out = new Float32Array(16);
+
+    out[0] = xx;
+    out[1] = yx;
+    out[2] = zx;
+    out[3] = 0;
+
+    out[4] = xy;
+    out[5] = yy;
+    out[6] = zy;
+    out[7] = 0;
+
+    out[8] = xz;
+    out[9] = yz;
+    out[10] = zz;
+    out[11] = 0;
+
+    out[12] =
+      -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+
+    out[13] =
+      -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+
+    out[14] =
+      -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+
+    out[15] = 1;
+
+    return out;
+  }
+
+  function mat4Model(box, angle = 0) {
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+
+    const out = new Float32Array(16);
+
+    out[0] = c * box.w;
+    out[1] = 0;
+    out[2] = s * box.w;
+    out[3] = 0;
+
+    out[4] = 0;
+    out[5] = box.h;
+    out[6] = 0;
+    out[7] = 0;
+
+    out[8] = -s * box.d;
+    out[9] = 0;
+    out[10] = c * box.d;
+    out[11] = 0;
+
+    out[12] = box.x;
+    out[13] = box.y;
+    out[14] = box.z;
+    out[15] = 1;
+
+    return out;
+  }
+
+  function normalize3(x, y, z) {
+    const len = Math.hypot(x, y, z) || 1;
+
+    return [
+      x / len,
+      y / len,
+      z / len
+    ];
+  }
+
+  const mainVertexShader = `#version 300 es
+    precision highp float;
+
+    layout(location = 0) in vec3 aPosition;
+    layout(location = 1) in vec3 aNormal;
+
+    uniform mat4 uModel;
+    uniform mat4 uViewProjection;
+    uniform mat4 uLightViewProjection;
+
+    out vec3 vWorldPosition;
+    out vec3 vNormal;
+    out vec4 vLightPosition;
+
+    void main() {
+      vec4 world = uModel * vec4(aPosition, 1.0);
+
+      vWorldPosition = world.xyz;
+      vNormal = normalize(mat3(uModel) * aNormal);
+      vLightPosition = uLightViewProjection * world;
+
+      gl_Position = uViewProjection * world;
+    }
+  `;
+
+  const mainFragmentShader = `#version 300 es
+    precision highp float;
+
+    in vec3 vWorldPosition;
+    in vec3 vNormal;
+    in vec4 vLightPosition;
+
+    uniform vec3 uBaseColor;
+    uniform vec3 uLightDirection;
+    uniform sampler2D uShadowMap;
+    uniform bool uUseShadow;
+
+    out vec4 outColor;
+
+    float getShadow(vec3 normal) {
+      if (!uUseShadow) {
+        return 1.0;
+      }
+
+      vec3 shadowCoord =
+        vLightPosition.xyz /
+        vLightPosition.w;
+
+      shadowCoord =
+        shadowCoord * 0.5 + 0.5;
+
+      if (
+        shadowCoord.x < 0.0 ||
+        shadowCoord.x > 1.0 ||
+        shadowCoord.y < 0.0 ||
+        shadowCoord.y > 1.0 ||
+        shadowCoord.z < 0.0 ||
+        shadowCoord.z > 1.0
+      ) {
+        return 1.0;
+      }
+
+      float closestDepth =
+        texture(
+          uShadowMap,
+          shadowCoord.xy
+        ).r;
+
+      float ndotl =
+        max(
+          dot(
+            normalize(normal),
+            normalize(uLightDirection)
+          ),
+          0.0
+        );
+
+      float bias =
+        max(
+          0.0012,
+          0.0045 * (1.0 - ndotl)
+        );
+
+      return
+        shadowCoord.z - bias > closestDepth
+          ? 0.38
+          : 1.0;
+    }
+
+    void main() {
+      vec3 normal =
+        normalize(vNormal);
+
+      float diffuse =
+        max(
+          dot(
+            normal,
+            normalize(uLightDirection)
+          ),
+          0.0
+        );
+
+      float shadow =
+        getShadow(normal);
+
+      float lighting =
+        0.28 +
+        diffuse * 0.72 * shadow;
+
+      vec3 color =
+        uBaseColor * lighting;
+
+      outColor =
+        vec4(color, 1.0);
+    }
+  `;
+
+  const depthVertexShader = `#version 300 es
+    precision highp float;
+
+    layout(location = 0) in vec3 aPosition;
+
+    uniform mat4 uModel;
+    uniform mat4 uLightViewProjection;
+
+    void main() {
+      gl_Position =
+        uLightViewProjection *
+        uModel *
+        vec4(aPosition, 1.0);
+    }
+  `;
+
+  const depthFragmentShader = `#version 300 es
+    precision highp float;
+
+    void main() {
+    }
+  `;
+
+  const lineVertexShader = `#version 300 es
+    precision highp float;
+
+    layout(location = 0) in vec3 aPosition;
+
+    uniform mat4 uViewProjection;
+
+    void main() {
+      gl_Position =
+        uViewProjection *
+        vec4(aPosition, 1.0);
+    }
+  `;
+
+  const lineFragmentShader = `#version 300 es
+    precision highp float;
+
+    uniform vec4 uColor;
+
+    out vec4 outColor;
+
+    void main() {
+      outColor = uColor;
+    }
+  `;
+
+  const mainProgram =
+    createProgram(
+      mainVertexShader,
+      mainFragmentShader
+    );
+
+  const depthProgram =
+    createProgram(
+      depthVertexShader,
+      depthFragmentShader
+    );
+
+  const lineProgram =
+    createProgram(
+      lineVertexShader,
+      lineFragmentShader
+    );
+
+  // 1辺1の立方体
+  // 面ごとに頂点を分けて正しい法線を持たせる
+  const cubeData = new Float32Array([
+    // -Z
+    -0.5,-0.5,-0.5,  0, 0,-1,
+    -0.5, 0.5,-0.5,  0, 0,-1,
+     0.5, 0.5,-0.5,  0, 0,-1,
+    -0.5,-0.5,-0.5,  0, 0,-1,
+     0.5, 0.5,-0.5,  0, 0,-1,
+     0.5,-0.5,-0.5,  0, 0,-1,
+
+    // +Z
+    -0.5,-0.5, 0.5,  0, 0, 1,
+     0.5,-0.5, 0.5,  0, 0, 1,
+     0.5, 0.5, 0.5,  0, 0, 1,
+    -0.5,-0.5, 0.5,  0, 0, 1,
+     0.5, 0.5, 0.5,  0, 0, 1,
+    -0.5, 0.5, 0.5,  0, 0, 1,
+
+    // -X
+    -0.5,-0.5,-0.5, -1, 0, 0,
+    -0.5,-0.5, 0.5, -1, 0, 0,
+    -0.5, 0.5, 0.5, -1, 0, 0,
+    -0.5,-0.5,-0.5, -1, 0, 0,
+    -0.5, 0.5, 0.5, -1, 0, 0,
+    -0.5, 0.5,-0.5, -1, 0, 0,
+
+    // +X
+     0.5,-0.5,-0.5,  1, 0, 0,
+     0.5, 0.5,-0.5,  1, 0, 0,
+     0.5, 0.5, 0.5,  1, 0, 0,
+     0.5,-0.5,-0.5,  1, 0, 0,
+     0.5, 0.5, 0.5,  1, 0, 0,
+     0.5,-0.5, 0.5,  1, 0, 0,
+
+    // +Y
+    -0.5, 0.5,-0.5,  0, 1, 0,
+    -0.5, 0.5, 0.5,  0, 1, 0,
+     0.5, 0.5, 0.5,  0, 1, 0,
+    -0.5, 0.5,-0.5,  0, 1, 0,
+     0.5, 0.5, 0.5,  0, 1, 0,
+     0.5, 0.5,-0.5,  0, 1, 0,
+
+    // -Y
+    -0.5,-0.5,-0.5,  0,-1, 0,
+     0.5,-0.5,-0.5,  0,-1, 0,
+     0.5,-0.5, 0.5,  0,-1, 0,
+    -0.5,-0.5,-0.5,  0,-1, 0,
+     0.5,-0.5, 0.5,  0,-1, 0,
+    -0.5,-0.5, 0.5,  0,-1, 0
+  ]);
+
+  const cubeVao = gl.createVertexArray();
+  const cubeBuffer = gl.createBuffer();
+
+  gl.bindVertexArray(cubeVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    cubeData,
+    gl.STATIC_DRAW
+  );
+
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(
+    0,
+    3,
+    gl.FLOAT,
+    false,
+    24,
+    0
+  );
+
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(
+    1,
+    3,
+    gl.FLOAT,
+    false,
+    24,
+    12
+  );
+
+  gl.bindVertexArray(null);
+
+  // ---------------------------------------------------------
+  // 自由三角メッシュのGPUバッファ
+  // 頂点位置はワールド座標で焼き込み、法線は三角形ごとにフラット化
+  // ---------------------------------------------------------
+
+  function buildMeshGpu(mesh) {
+    const data = [];
+
+    for (const triangle of mesh.worldTriangles) {
+      for (const vertex of [triangle.a, triangle.b, triangle.c]) {
+        data.push(
+          vertex.x,
+          vertex.y,
+          vertex.z,
+          triangle.normal.x,
+          triangle.normal.y,
+          triangle.normal.z
+        );
+      }
+    }
+
+    const vao = gl.createVertexArray();
+    const buffer = gl.createBuffer();
+
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(data),
+      gl.STATIC_DRAW
+    );
+
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(
+      0,
+      3,
+      gl.FLOAT,
+      false,
+      24,
+      0
+    );
+
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(
+      1,
+      3,
+      gl.FLOAT,
+      false,
+      24,
+      12
+    );
+
+    gl.bindVertexArray(null);
+
+    mesh.gpu = {
+      vao,
+      buffer,
+      vertexCount: data.length / 6
+    };
+  }
+
+  for (const mesh of meshObjects) {
+    buildMeshGpu(mesh);
+  }
+
+  const identityModel = mat4Identity();
+
+  const gridVertices = [];
+
+  for (let x = -72; x <= 72; x += 2) {
+    gridVertices.push(
+      x, 0.012, -44,
+      x, 0.012,  44
+    );
+  }
+
+  for (let z = -44; z <= 44; z += 2) {
+    gridVertices.push(
+      -72, 0.012, z,
+       72, 0.012, z
+    );
+  }
+
+  const gridVao = gl.createVertexArray();
+  const gridBuffer = gl.createBuffer();
+
+  gl.bindVertexArray(gridVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gridBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array(gridVertices),
+    gl.STATIC_DRAW
+  );
+
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(
+    0,
+    3,
+    gl.FLOAT,
+    false,
+    12,
+    0
+  );
+
+  gl.bindVertexArray(null);
+
+  // ---------------------------------------------------------
+  // シャドウマップ
+  // ---------------------------------------------------------
+
+  const shadowSize = 1024;
+
+  const shadowTexture =
+    gl.createTexture();
+
+  gl.bindTexture(
+    gl.TEXTURE_2D,
+    shadowTexture
+  );
+
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.DEPTH_COMPONENT24,
+    shadowSize,
+    shadowSize,
+    0,
+    gl.DEPTH_COMPONENT,
+    gl.UNSIGNED_INT,
+    null
+  );
+
+  gl.texParameteri(
+    gl.TEXTURE_2D,
+    gl.TEXTURE_MIN_FILTER,
+    gl.NEAREST
+  );
+
+  gl.texParameteri(
+    gl.TEXTURE_2D,
+    gl.TEXTURE_MAG_FILTER,
+    gl.NEAREST
+  );
+
+  gl.texParameteri(
+    gl.TEXTURE_2D,
+    gl.TEXTURE_WRAP_S,
+    gl.CLAMP_TO_EDGE
+  );
+
+  gl.texParameteri(
+    gl.TEXTURE_2D,
+    gl.TEXTURE_WRAP_T,
+    gl.CLAMP_TO_EDGE
+  );
+
+  const shadowFramebuffer =
+    gl.createFramebuffer();
+
+  gl.bindFramebuffer(
+    gl.FRAMEBUFFER,
+    shadowFramebuffer
+  );
+
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.DEPTH_ATTACHMENT,
+    gl.TEXTURE_2D,
+    shadowTexture,
+    0
+  );
+
+  gl.drawBuffers([gl.NONE]);
+  gl.readBuffer(gl.NONE);
+
+  const framebufferStatus =
+    gl.checkFramebufferStatus(
+      gl.FRAMEBUFFER
+    );
+
+  if (
+    framebufferStatus !==
+    gl.FRAMEBUFFER_COMPLETE
+  ) {
+    throw new Error(
+      "シャドウ用Framebufferを作成できない"
+    );
+  }
+
+  gl.bindFramebuffer(
+    gl.FRAMEBUFFER,
+    null
+  );
+
+  const mainUniforms = {
+    model:
+      gl.getUniformLocation(
+        mainProgram,
+        "uModel"
+      ),
+
+    viewProjection:
+      gl.getUniformLocation(
+        mainProgram,
+        "uViewProjection"
+      ),
+
+    lightViewProjection:
+      gl.getUniformLocation(
+        mainProgram,
+        "uLightViewProjection"
+      ),
+
+    baseColor:
+      gl.getUniformLocation(
+        mainProgram,
+        "uBaseColor"
+      ),
+
+    lightDirection:
+      gl.getUniformLocation(
+        mainProgram,
+        "uLightDirection"
+      ),
+
+    shadowMap:
+      gl.getUniformLocation(
+        mainProgram,
+        "uShadowMap"
+      ),
+
+    useShadow:
+      gl.getUniformLocation(
+        mainProgram,
+        "uUseShadow"
+      )
+  };
+
+  const depthUniforms = {
+    model:
+      gl.getUniformLocation(
+        depthProgram,
+        "uModel"
+      ),
+
+    lightViewProjection:
+      gl.getUniformLocation(
+        depthProgram,
+        "uLightViewProjection"
+      )
+  };
+
+  const lineUniforms = {
+    viewProjection:
+      gl.getUniformLocation(
+        lineProgram,
+        "uViewProjection"
+      ),
+
+    color:
+      gl.getUniformLocation(
+        lineProgram,
+        "uColor"
+      )
+  };
+
+  function colorToVec3(hex) {
+    const value =
+      parseInt(hex.slice(1), 16);
+
+    return [
+      ((value >> 16) & 255) / 255,
+      ((value >> 8) & 255) / 255,
+      (value & 255) / 255
+    ];
+  }
+
+  const lightTowardSource =
+    normalize3(
+      -0.65,
+       1.0,
+      -0.45
+    );
+
+  function getLightViewProjection() {
+    const sceneCenter =
+      [0, 15, 0];
+
+    const lightEye = [
+      sceneCenter[0] +
+        lightTowardSource[0] * 60,
+
+      sceneCenter[1] +
+        lightTowardSource[1] * 60,
+
+      sceneCenter[2] +
+        lightTowardSource[2] * 60
+    ];
+
+    const lightView =
+      mat4LookAt(
+        lightEye,
+        sceneCenter,
+        [0, 1, 0]
+      );
+
+    const lightProjection =
+      mat4Ortho(
+        -88,
+         88,
+        -72,
+         72,
+         1,
+         180
+      );
+
+    return mat4Multiply(
+      lightProjection,
+      lightView
+    );
+  }
+
+  function getCameraViewProjection() {
+    // 従来の focalLength をFOVへ変換
+    const fov =
+      2 * Math.atan(
+        (innerHeight * 0.5) /
+        camera.focalLength
+      );
+
+    const projection =
+      mat4Perspective(
+        fov,
+        innerWidth / innerHeight,
+        0.1,
+        180
+      );
+
+    const view =
+      mat4LookAt(
+        [camera.x, camera.y, camera.z],
+        [
+          camera.targetX,
+          camera.targetY,
+          camera.targetZ
+        ],
+        [0, 1, 0]
+      );
+
+    return mat4Multiply(
+      projection,
+      view
+    );
+  }
+
+  function drawDepthBox(
+    box,
+    lightViewProjection,
+    angle = 0
+  ) {
+    gl.uniformMatrix4fv(
+      depthUniforms.model,
+      false,
+      mat4Model(box, angle)
+    );
+
+    gl.uniformMatrix4fv(
+      depthUniforms.lightViewProjection,
+      false,
+      lightViewProjection
+    );
+
+    gl.drawArrays(
+      gl.TRIANGLES,
+      0,
+      36
+    );
+  }
+
+  function drawDepthMesh(
+    mesh,
+    lightViewProjection
+  ) {
+    gl.bindVertexArray(mesh.gpu.vao);
+
+    gl.uniformMatrix4fv(
+      depthUniforms.model,
+      false,
+      identityModel
+    );
+
+    gl.uniformMatrix4fv(
+      depthUniforms.lightViewProjection,
+      false,
+      lightViewProjection
+    );
+
+    gl.drawArrays(
+      gl.TRIANGLES,
+      0,
+      mesh.gpu.vertexCount
+    );
+  }
+
+  function renderShadowMap(
+    lightViewProjection
+  ) {
+    gl.bindFramebuffer(
+      gl.FRAMEBUFFER,
+      shadowFramebuffer
+    );
+
+    gl.viewport(
+      0,
+      0,
+      shadowSize,
+      shadowSize
+    );
+
+    gl.clear(
+      gl.DEPTH_BUFFER_BIT
+    );
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
+
+    // 影のにじみではなく自己影ノイズを抑える
+    gl.cullFace(gl.FRONT);
+
+    gl.enable(
+      gl.POLYGON_OFFSET_FILL
+    );
+
+    gl.polygonOffset(
+      2.0,
+      4.0
+    );
+
+    gl.useProgram(
+      depthProgram
+    );
+
+    gl.bindVertexArray(
+      cubeVao
+    );
+
+    for (const obj of objects) {
+      if (obj.visible === false) {
+        continue;
+      }
+
+      drawDepthBox(
+        obj,
+        lightViewProjection,
+        0
+      );
+    }
+
+    for (const mesh of meshObjects) {
+      drawDepthMesh(
+        mesh,
+        lightViewProjection
+      );
+    }
+
+    gl.bindVertexArray(cubeVao);
+
+    drawDepthBox(
+      player,
+      lightViewProjection,
+      player.angle
+    );
+
+    gl.disable(
+      gl.POLYGON_OFFSET_FILL
+    );
+
+    gl.bindVertexArray(null);
+
+    gl.bindFramebuffer(
+      gl.FRAMEBUFFER,
+      null
+    );
+  }
+
+  function drawMainBox(
+    box,
+    viewProjection,
+    lightViewProjection,
+    angle = 0,
+    useShadow = true
+  ) {
+    gl.uniformMatrix4fv(
+      mainUniforms.model,
+      false,
+      mat4Model(box, angle)
+    );
+
+    gl.uniform3fv(
+      mainUniforms.baseColor,
+      colorToVec3(box.color)
+    );
+
+    gl.uniform1i(
+      mainUniforms.useShadow,
+      useShadow ? 1 : 0
+    );
+
+    gl.drawArrays(
+      gl.TRIANGLES,
+      0,
+      36
+    );
+  }
+
+  function drawMainMesh(
+    mesh,
+    viewProjection,
+    lightViewProjection,
+    useShadow = true
+  ) {
+    gl.bindVertexArray(mesh.gpu.vao);
+
+    gl.uniformMatrix4fv(
+      mainUniforms.model,
+      false,
+      identityModel
+    );
+
+    gl.uniform3fv(
+      mainUniforms.baseColor,
+      colorToVec3(mesh.color)
+    );
+
+    gl.uniform1i(
+      mainUniforms.useShadow,
+      useShadow ? 1 : 0
+    );
+
+    gl.drawArrays(
+      gl.TRIANGLES,
+      0,
+      mesh.gpu.vertexCount
+    );
+  }
+
+  function renderGridWebGL(
+    viewProjection
+  ) {
+    if (
+      currentStage &&
+      currentStage.showGrid === false
+    ) {
+      return;
+    }
+
+    gl.useProgram(
+      lineProgram
+    );
+
+    gl.uniformMatrix4fv(
+      lineUniforms.viewProjection,
+      false,
+      viewProjection
+    );
+
+    gl.uniform4f(
+      lineUniforms.color,
+      1,
+      1,
+      1,
+      0.12
+    );
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(
+      gl.SRC_ALPHA,
+      gl.ONE_MINUS_SRC_ALPHA
+    );
+
+    gl.bindVertexArray(
+      gridVao
+    );
+
+    gl.drawArrays(
+      gl.LINES,
+      0,
+      gridVertices.length / 3
+    );
+
+    gl.bindVertexArray(null);
+    gl.disable(gl.BLEND);
+  }
+
+  function createFacePart(localX, localY, localZ, w, h, d, color) {
+    const s = Math.sin(player.angle);
+    const c = Math.cos(player.angle);
+
+    return {
+      x: player.x + localX * c - localZ * s,
+      y: player.y + localY,
+      z: player.z + localX * s + localZ * c,
+      w,
+      h,
+      d,
+      color
+    };
+  }
+
+  function renderPlayerFaceWebGL(
+    viewProjection,
+    lightViewProjection
+  ) {
+    // 前面(-Z側)に ・_・ の顔を付ける
+    // 少しだけ前へ浮かせてZ-fightingを避ける
+    const faceZ = -player.d / 2 - 0.035;
+
+    const leftEye = createFacePart(
+      -0.22, 0.18, faceZ,
+      0.10, 0.10, 0.04,
+      "#111111"
+    );
+
+    const rightEye = createFacePart(
+       0.22, 0.18, faceZ,
+      0.10, 0.10, 0.04,
+      "#111111"
+    );
+
+    const mouth = createFacePart(
+       0.00, -0.10, faceZ,
+      0.26, 0.07, 0.04,
+      "#111111"
+    );
+
+    drawMainBox(
+      leftEye,
+      viewProjection,
+      lightViewProjection,
+      player.angle,
+      false
+    );
+
+    drawMainBox(
+      rightEye,
+      viewProjection,
+      lightViewProjection,
+      player.angle,
+      false
+    );
+
+    drawMainBox(
+      mouth,
+      viewProjection,
+      lightViewProjection,
+      player.angle,
+      false
+    );
+  }
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.frontFace(gl.CCW);
+
+  // =========================================================
+  // 更新
+  // =========================================================
+
+  function update(dt) {
+    // リフトや落下足場を先に動かす
+    // 乗っている場合は自キャラも一緒に運ぶ
+    updateDynamicPlatforms(dt);
+
+    // 地上・空中判定を更新
+    checkGrounded();
+
+    updateHorizontalMovement(dt);
+    updateJump(dt);
+    updateGoal();
+    updateCamera(dt);
+  }
+
+  // =========================================================
+  // 描画
+  // =========================================================
+
+  function render() {
+    const lightViewProjection =
+      getLightViewProjection();
+
+    const viewProjection =
+      getCameraViewProjection();
+
+    // 1パス目:
+    // 光源視点から深度だけ描いて影情報を作る
+    renderShadowMap(
+      lightViewProjection
+    );
+
+    // 2パス目:
+    // カメラ視点で通常描画
+    gl.bindFramebuffer(
+      gl.FRAMEBUFFER,
+      null
+    );
+
+    gl.viewport(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    gl.clearColor(
+      0.075,
+      0.105,
+      0.15,
+      1
+    );
+
+    gl.clear(
+      gl.COLOR_BUFFER_BIT |
+      gl.DEPTH_BUFFER_BIT
+    );
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+
+    // 地面グリッド
+    renderGridWebGL(
+      viewProjection
+    );
+
+    gl.useProgram(
+      mainProgram
+    );
+
+    gl.uniformMatrix4fv(
+      mainUniforms.viewProjection,
+      false,
+      viewProjection
+    );
+
+    gl.uniformMatrix4fv(
+      mainUniforms.lightViewProjection,
+      false,
+      lightViewProjection
+    );
+
+    gl.uniform3fv(
+      mainUniforms.lightDirection,
+      lightTowardSource
+    );
+
+    gl.activeTexture(
+      gl.TEXTURE0
+    );
+
+    gl.bindTexture(
+      gl.TEXTURE_2D,
+      shadowTexture
+    );
+
+    gl.uniform1i(
+      mainUniforms.shadowMap,
+      0
+    );
+
+    gl.bindVertexArray(
+      cubeVao
+    );
+
+    // 深度バッファにより、面の中心距離ではなく
+    // 各ピクセル単位で最も手前の表面だけが残る
+    for (const obj of objects) {
+      if (obj.visible === false) {
+        continue;
+      }
+
+      drawMainBox(
+        obj,
+        viewProjection,
+        lightViewProjection
+      );
+    }
+
+    for (const mesh of meshObjects) {
+      drawMainMesh(
+        mesh,
+        viewProjection,
+        lightViewProjection
+      );
+    }
+
+    gl.bindVertexArray(cubeVao);
+
+    drawMainBox(
+      player,
+      viewProjection,
+      lightViewProjection,
+      player.angle
+    );
+
+    renderPlayerFaceWebGL(
+      viewProjection,
+      lightViewProjection
+    );
+
+    gl.bindVertexArray(null);
+
+    const speed =
+      hypot2(
+        player.vx,
+        player.vz
+      );
+
+    const goalTopY =
+      getBounds(
+        goalPlatform
+      ).maxY;
+
+    statusEl.textContent =
+      `${currentStage ? currentStage.name : ""}  ` +
+      `${player.isGrounded ? "GROUND" : "AIR"}  ` +
+      `SPEED ${speed.toFixed(2)}  ` +
+      `HEIGHT ${(player.y - player.h / 2).toFixed(1)} / ${goalTopY.toFixed(1)}  ` +
+      `ZOOM ${camera.distance.toFixed(1)}  ` +
+      `PITCH ${(camera.pitch * 180 / Math.PI).toFixed(0)}°`;
+
+    goalMessageEl.style.display =
+      goalReached
+        ? "block"
+        : "none";
+  }
+
+  // =========================================================
+  // メインループ
+  // =========================================================
+
+  stageSelect.value =
+    currentStageId;
+
+  stageDescriptionEl.textContent =
+    currentStage.description;
+
+  goalDetailEl.textContent =
+    currentStage.name;
+
+  let lastTime = performance.now();
+
+  function loop(now) {
+    const dt = Math.min(
+      (now - lastTime) / 1000,
+      0.05
+    );
+
+    lastTime = now;
+
+    update(dt);
+    render();
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
